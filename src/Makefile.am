@@ -3,7 +3,14 @@ pglib_LTLIBRARIES = libpgms.la
 
 
 libpgms_la_SOURCES = \
-		pgms.c
+		cosine_greedy.c \
+		cosine_hungarian.c \
+		cosine.h \
+		lsap.c \
+		lsap.h \
+		pgms.c \
+		spectrum.c \
+		utils.h
 
 
 libpgms_la_LDFLAGS = -lm
