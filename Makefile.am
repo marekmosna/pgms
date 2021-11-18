@@ -1,0 +1,2 @@
+SUBDIRS=src extension
+ACLOCAL_AMFLAGS=-I m4
