@@ -14,4 +14,4 @@ libpgms_la_SOURCES = \
 
 
 libpgms_la_LDFLAGS = -lm
-libpgms_la_CPPFLAGS = -std=gnu99 -O3 -fallow-store-data-races -fno-math-errno $(POSTGRESQL_CPPFLAGS)
+libpgms_la_CPPFLAGS = -std=gnu99 -O3 -fno-math-errno $(POSTGRESQL_CPPFLAGS)
