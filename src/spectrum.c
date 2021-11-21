@@ -49,7 +49,7 @@ Datum spectrum_output(PG_FUNCTION_ARGS)
     size_t count = (VARSIZE(spectrum) - VARHDRSZ) / sizeof(float4) / 2;
     float4 *values = (float4 *) VARDATA(spectrum);
 
-    char *result = (char *) palloc(count ? count * (FLOAT_SHORTEST_DECIMAL_LEN + 2) : 1);
+    char *result = (char *) palloc(count ? 2 * count * (FLOAT_SHORTEST_DECIMAL_LEN + 1) : 1);
     char *buffer = result;
 
     for(size_t i = 0; i < count; i++)
