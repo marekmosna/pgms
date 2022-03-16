@@ -9,10 +9,14 @@ libpgms_la_SOURCES = \
 		lsap.c \
 		lsap.h \
 		mgf.c \
+		json.c \
 		pgms.c \
 		pgms.h \
 		spectrum.c \
-		utils.h
+		utils.h \
+		intersect_mz_match.c \
+		precurzor_mz_match.c \
+		modified_cosine.c
 
 
 libpgms_la_LDFLAGS = -lm
