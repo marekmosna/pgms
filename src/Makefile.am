@@ -8,7 +8,9 @@ libpgms_la_SOURCES = \
 		cosine.h \
 		lsap.c \
 		lsap.h \
+		mgf.c \
 		pgms.c \
+		pgms.h \
 		spectrum.c \
 		utils.h
 
