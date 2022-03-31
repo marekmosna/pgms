@@ -1,9 +1,10 @@
 # Postgres Mass Spectrometry Extension
 
-This extestion was developed and tested on Linux Ubuntu 20.04.3 against Postgresql 12.9
+The extension was developed and tested on Linux Ubuntu 20.04.3 against Postgresql 12.9
 
 ## Requirements
 
+On Debian based Linux distributions install following packages
 ```bash
 sudo apt-get install git postgresql build-essential autoconf libtool
 ```
@@ -38,7 +39,7 @@ sudo make install
 
 ## Setup PosgreSQL database
 
-Please, log into your PostgreSQL server as the postgres user. A user without admin privileges cannot create an extension using external libraries.
+Please, log into your PostgreSQL server console as the superuser. A user without admin privileges cannot create an extension using external libraries.
 
 ```bash
 psql -U postgres
@@ -48,13 +49,36 @@ psql -U postgres
 create role test with login;
 \password test
 create database test owner test;
-
-\connect test
-
-create schema pgms;
-alter schema pgms owner to test;
+\c test
 create extension pgms;
+alter schema pgms owner to test;
+\q
+```
 
+## Import data
+
+Download the sources.
+
+```bash
+wget -O isdb.mgf https://zenodo.org/record/5607264/files/MultiSources_ISDB_pos.mgf
+```
+
+This particular source of data is malformed so it's necessary to sanitize them locally by:
+
+```bash
+sed -i '/END IONS/,/BEGIN IONS/{/IONS/!d}' isdb.mgf
+```
+
+Please, log into your PostgreSQL server console and import the data into the database. 
+
+```bash
+psql -U test -d test
+```
+
+
+The names of the columns are derived from the paramaters which the input file contains.
+
+```sql
 create table spectrums (
   scans integer,
   inchikey varchar,
@@ -70,23 +94,9 @@ create table spectrums (
   spectrum pgms.spectrum
 );
 
-alter table spectrums owner to test;
+\lo_import isdb.mgf
 
-\q
-```
-
-## Import data
-
-Download the sources
-```bash
-wget -O /tmp/isdb.mgf https://zenodo.org/record/5607264/files/MultiSources_ISDB_pos.mgf 
-```
-
-Import the data into the database
-```sql
-\lo_import /tmp/isdb.mgf #returns large object id here referred as lo_id
-
-insert into spectrums select * from pgms.load_from_mgf(/*lo_id*/) as (
+insert into spectrums select * from pgms.load_from_mgf(:LASTOID) as (
     "SCANS" integer,
     "INCHIKEY" varchar,
     "IONMODE" varchar,
@@ -102,23 +112,10 @@ insert into spectrums select * from pgms.load_from_mgf(/*lo_id*/) as (
 );
 ```
 
-In case the normalized spectrum is necessary use
+In case the normalized spectrums are required, use
 
 ```sql
-insert into spectrums select "SCANS", "INCHIKEY", "IONMODE", "CHARGE", "NAME", "PEPMASS", "EXACTMASS", "LIBRARYQUALITY", "MOLECULAR_FORMULA", "SMILES", "INCHI", pgms.spectrum_normalize(spectrum) as spectrum  from pgms.load_from_mgf(/*lo_id*/) as (
-    "SCANS" integer,
-    "INCHIKEY" varchar,
-    "IONMODE" varchar,
-    "CHARGE" integer,
-    "NAME" varchar,
-    "PEPMASS" float,
-    "EXACTMASS" varchar,
-    "LIBRARYQUALITY" varchar,
-    "MOLECULAR_FORMULA" varchar,
-    "SMILES" varchar,
-    "INCHI" varchar,
-    spectrum pgms.spectrum
-);
+update spectrums set spectrum = pgms.spectrum_normalize(spectrum);
 ```
 
 ## Example queries
