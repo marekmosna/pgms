@@ -1,4 +1,4 @@
-# A sandobox folder to evaluate pgms capacities
+# A sandbox folder to evaluate pgms capacities
 
 
 ## Large experimental spectral lib
