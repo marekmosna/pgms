@@ -12,7 +12,8 @@ CREATE TYPE spectrum
     internallength = VARIABLE,
     input = spectrum_input,
     output = spectrum_output,
-    alignment = float
+    alignment = float,
+    storage = extended
 );
 
 
