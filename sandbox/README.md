@@ -11,16 +11,24 @@ Downloading GNPS experimental libs
 ```
 create table spectrums_gnps (
   scans integer,
-  inchikey varchar,
   ionmode varchar,
   charge integer,
   name varchar,
   pepmass float,
-  exactmass varchar,
-  libraryquality varchar,
-  molecular_formula varchar,
+  libraryquality integer,
   smiles varchar,
   inchi varchar,
+  inchiaux varchar,
+  datacollector varchar,
+  filename varchar,
+  mslevel varchar,
+  organism varchar,
+  pi varchar,
+  pubmed varchar,
+  seq varchar,
+  source_instrument varchar,
+  spectrumid varchar,
+  submituser varchar,
   spectrum pgms.spectrum
 );
 
@@ -29,16 +37,24 @@ test=> \lo_import gnps.mgf
 
 insert into spectrums_gnps select * from pgms.load_from_mgf(:LASTOID) as (
     "SCANS" integer,
-    "INCHIKEY" varchar,
     "IONMODE" varchar,
     "CHARGE" integer,
     "NAME" varchar,
     "PEPMASS" float,
-    "EXACTMASS" varchar,
-    "LIBRARYQUALITY" varchar,
-    "MOLECULAR_FORMULA" varchar,
+    "LIBRARYQUALITY" integer,
     "SMILES" varchar,
     "INCHI" varchar,
+    "INCHIAUX" varchar,
+    "DATACOLLECTOR" varchar,
+    "FILENAME" varchar,
+    "MSLEVEL" varchar,
+    "ORGANISM" varchar,
+    "PI" varchar,
+    "PUBMED" varchar,
+    "SEQ" varchar,
+    "SOURCE_INSTRUMENT" varchar,
+    "SPECTRUMID" varchar,
+    "SUBMITUSER" varchar,
     spectrum pgms.spectrum
 );
 ```
