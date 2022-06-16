@@ -1,3 +1,21 @@
+/* 
+ * This file is part of the PGMS distribution (https://github.com/genesissoftware-tech/pgms or https://ip-147-251-124-124.flt.cloud.muni.cz/chemdb/pgms).
+ * Copyright (c) 2022 Marek Mosna (info@genesissoftware.eu) for functions spectrum_max_intensity and spectrum_normalize
+ * Copyright (c) 2022 Jakub Galgonek (jakub.galgonek@uochb.cas.cz) for functions spectrum_input and spectrum_output
+ * 
+ * This program is free software: you can redistribute it and/or modify  
+ * it under the terms of the GNU General Public License as published by  
+ * the Free Software Foundation, version 3.
+ *
+ * This program is distributed in the hope that it will be useful, but 
+ * WITHOUT ANY WARRANTY; without even the implied warranty of 
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU 
+ * General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License 
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
+
 #include <postgres.h>
 #include <fmgr.h>
 #include <common/shortest_dec.h>

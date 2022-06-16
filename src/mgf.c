@@ -1,3 +1,20 @@
+/* 
+ * This file is part of the PGMS distribution (https://github.com/genesissoftware-tech/pgms or https://ip-147-251-124-124.flt.cloud.muni.cz/chemdb/pgms).
+ * Copyright (c) 2022 Marek Mosna (info@genesissoftware.eu).
+ * 
+ * This program is free software: you can redistribute it and/or modify  
+ * it under the terms of the GNU General Public License as published by  
+ * the Free Software Foundation, version 3.
+ *
+ * This program is distributed in the hope that it will be useful, but 
+ * WITHOUT ANY WARRANTY; without even the implied warranty of 
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU 
+ * General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License 
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
+
 #include "pgms.h"
 
 #include <funcapi.h>
@@ -39,25 +56,12 @@ typedef struct
     int                 pos;
     int                 size;
     char*               data;
-    Datum*              values;
-    bool*               isnull;
+    Datum*              g_values;
+    bool*               g_isnull;
     AttInMetadata *     meta;
     ParserState         status;
 }
 ParserData, *Parser;
-
-typedef struct
-{
-   float4 mz;
-   float4 intenzity;
-} spectrum_t;
-
-static int spectrum_cmp(const void* l,const void* r)
-{
-    spectrum_t* l_value = (spectrum_t*)l;
-    spectrum_t* r_value = (spectrum_t*)r;
-    return l_value->mz > r_value->mz;
-}
 
 static bool is_blank(const char* s)
 {
@@ -106,9 +110,10 @@ static void set_parameter(AttInMetadata *attinmeta, Datum *values, bool *isnull,
 
     Oid typid = TupleDescAttr(tupdesc, idx)->atttypid;
 
-    // special treatment of mgf ranges
+    elog(DEBUG1, "param %s with typeiod: %d", name, typid);
+
     if(typid == INT4RANGEOID || typid == INT8RANGEOID || typid == NUMRANGEOID)
-    {
+    { // special treatment of mgf ranges
         char *ptr = value;
 
         while(*ptr != '\0' && isspace((unsigned char) *ptr))
@@ -140,38 +145,70 @@ static void set_parameter(AttInMetadata *attinmeta, Datum *values, bool *isnull,
 
             return;
         }
-    } // special treatment of postfix sign
-    else if(typid == INT4OID || typid == NUMERICOID || typid == INT8OID)
+    }
+    else if(typid == INT4OID || typid == NUMERICOID || typid == INT8OID || typid == FLOAT4OID || typid == FLOAT8OID)
+    { // special treatment of postfix sign
         reverse_postfix_sign(value);
+    }
+    else if(typid == FLOAT4ARRAYOID || typid == FLOAT8ARRAYOID || typid == INT4ARRAYOID || typid == INT8ARRAYOID ||typid == NUMERICARRAYOID)
+    { // special treat for array of numbers
+        cvector_vector_type(char*)  tkns = NULL;
+        char                        *pbegin = value;
+        char                        *pend = NULL;
+        bool                        spacing = false;
+        size_t                      count = 0;
+
+        pend = value + strlen(value);
+
+        while(likely(pbegin != pend) && isspace((unsigned char) *pbegin))
+            pbegin++;
+
+        while(likely(pbegin != pend) && isspace((unsigned char) *pend))
+            pend--;
+
+        if(unlikely(pend == pbegin))
+        {
+            values[idx] = (Datum)0;
+            isnull[idx] = true;
+            return;
+        }
+
+        cvector_reserve(tkns, 50);
+        cvector_push_back(tkns, pbegin);
+
+        for (value = pbegin; value != pend; value++)
+        {
+            if(unlikely(isspace(*value)))
+            {
+                spacing = true;
+            }
+            else if(unlikely(spacing))
+            {
+                *(value - 1) = '\0';
+                cvector_push_back(tkns, value);
+                spacing = false;
+            }
+        }
+
+        StringInfo array = makeStringInfo();
+
+        count = cvector_size(tkns);
+        appendStringInfoCharMacro(array, '{');
+        for(size_t i = 0; i < count; i++)
+        {
+            reverse_postfix_sign(tkns[i]);
+            appendStringInfoString(array, tkns[i]);
+            appendStringInfoCharMacro(array, i == count - 1 ? '}' : ',');
+        }
+        values[idx] = InputFunctionCall(&attinmeta->attinfuncs[idx], array->data, attinmeta->attioparams[idx], attinmeta->atttypmods[idx]);
+        isnull[idx] = false;
+        pfree(array->data);
+        pfree(array);
+        return;
+    }
 
     values[idx] = InputFunctionCall(&attinmeta->attinfuncs[idx], value, attinmeta->attioparams[idx], attinmeta->atttypmods[idx]);
     isnull[idx] = false;
-}
-
-
-static void set_spectrum(AttInMetadata *attinmeta, Datum *values, bool *isnull, spectrum_t* data, int count)
-{
-    TupleDesc tupdesc = attinmeta->tupdesc;
-    size_t size = count * sizeof(spectrum_t) + VARHDRSZ;
-    void *result = palloc0(size);
-    float4* result_data = (float4*) VARDATA(result);
-
-    SET_VARSIZE(result, size);
-
-    for(size_t i = 0; i < count; i++)
-    {
-        result_data[i] = data[i].mz;
-        result_data[count + i] = data[i].intenzity;
-    }
-
-    for(int idx = 0; idx < tupdesc->natts; idx++)
-    {
-        if(tupdesc->attrs[idx].atttypid == spectrumOid)
-        {
-            values[idx] = PointerGetDatum(result);
-            isnull[idx] = false;
-        }
-    }
 }
 
 static Parser parser_init_lob(LargeObjectDesc* in)
@@ -182,8 +219,8 @@ static Parser parser_init_lob(LargeObjectDesc* in)
     parser->file = in;
     parser->size = 0;
     parser->data = palloc(BUFFER_SIZE);
-    parser->values = NULL;
-    parser->isnull = NULL;
+    parser->g_values = NULL;
+    parser->g_isnull = NULL;
     parser->meta = NULL;
     parser->status = BEGIN;
 
@@ -199,8 +236,8 @@ static Parser parser_init_varchar(VarChar* in)
     parser->size = VARSIZE(in) - VARHDRSZ;
     parser->data = palloc(parser->size);
     memcpy(parser->data, VARDATA(in), parser->size);
-    parser->values = NULL;
-    parser->isnull = NULL;
+    parser->g_values = NULL;
+    parser->g_isnull = NULL;
     parser->meta = NULL;
     parser->status = BEGIN;
 
@@ -217,8 +254,8 @@ static void parser_close(Parser parser)
         inv_close(parser->file);
     }
 
-    pfree(parser->values);
-    pfree(parser->isnull);
+    pfree(parser->g_values);
+    pfree(parser->g_isnull);
     pfree(parser);
 }
 
@@ -262,6 +299,7 @@ static int read_line(Parser parser, StringInfo buffer)
     }
     while(true);
 
+    elog(DEBUG1, "read line: %s", buffer->data);
     return white_only ? 0 : cnt;
 }
 
@@ -274,13 +312,13 @@ static void parser_global_setup(Parser parser, AttInMetadata *meta)
     Assert(parser);
 
     parser->meta = meta;
-    parser->values = palloc(meta->tupdesc->natts * sizeof(Datum));
-    parser->isnull = palloc(meta->tupdesc->natts * sizeof(bool));
+    parser->g_values = palloc(meta->tupdesc->natts * sizeof(Datum));
+    parser->g_isnull = palloc(meta->tupdesc->natts * sizeof(bool));
 
     for(int i = 0; i < meta->tupdesc->natts; i++)
     {
-        parser->values[i] = (Datum) NULL;
-        parser->isnull[i] = true;
+        parser->g_values[i] = (Datum) NULL;
+        parser->g_isnull[i] = true;
     }
 
     while(true)
@@ -304,7 +342,7 @@ static void parser_global_setup(Parser parser, AttInMetadata *meta)
         else if(!bcomment && parser->status == BEGIN &&((eq = strchr(line->data, '=')) != NULL))
         {
             *eq++ = '\0';
-            set_parameter(parser->meta, parser->values, parser->isnull, line->data, eq);
+            set_parameter(parser->meta, parser->g_values, parser->g_isnull, line->data, eq);
             elog(DEBUG1, "%s: %s", line->data, eq);
         }
         resetStringInfo(line);
@@ -314,7 +352,7 @@ static void parser_global_setup(Parser parser, AttInMetadata *meta)
     pfree(line);
 }
 
-static bool parser_next(Parser parser)
+static bool parser_next(Parser parser, Datum* l_values, bool* l_isnull)
 {
     cvector_vector_type(spectrum_t) spectrum = NULL;
     StringInfo line = makeStringInfo();
@@ -336,7 +374,10 @@ static bool parser_next(Parser parser)
             break;
         }
         else if(result == 0)
+        {
+            resetStringInfo(line);
             continue;
+        }
 
         if(is_comment(line))
         {
@@ -353,14 +394,14 @@ static bool parser_next(Parser parser)
         {
             elog(DEBUG1, END_IONS_STR);
             qsort(spectrum, cvector_size(spectrum), sizeof(spectrum_t), spectrum_cmp);
-            set_spectrum(parser->meta, parser->values, parser->isnull, spectrum, cvector_size(spectrum));
+            set_spectrum(parser->meta, l_values, l_isnull, spectrum, cvector_size(spectrum));
             cvector_free(spectrum);
             parser->status = END_IONS;
         }
         else if(parser->status == BEGIN_IONS && ((eq = strchr(line->data, '=')) != NULL))
         {
             *eq++ = '\0';
-            set_parameter(parser->meta, parser->values, parser->isnull, line->data, eq);
+            set_parameter(parser->meta, l_values, l_isnull, line->data, eq);
             elog(DEBUG1, "%s: %s", line->data, eq);
         }
         else if(parser->status == BEGIN_IONS
@@ -395,6 +436,8 @@ Datum load_from_mgf(PG_FUNCTION_ARGS)
     bool next;
     FuncCallContext *funcctx = NULL;
     Parser parser = NULL;
+    Datum* values = NULL;
+    bool* isnull = NULL;
 
     if(SRF_IS_FIRSTCALL())
     {
@@ -427,25 +470,38 @@ Datum load_from_mgf(PG_FUNCTION_ARGS)
 
     funcctx = SRF_PERCALL_SETUP();
     parser = (Parser) funcctx->user_fctx;
+    values = palloc(parser->meta->tupdesc->natts * sizeof(Datum));
+    isnull = palloc(parser->meta->tupdesc->natts * sizeof(bool));
+
+    for(int i = 0; i < parser->meta->tupdesc->natts; i++)
+    {
+        values[i] = parser->g_values[i];
+        isnull[i] = parser->g_isnull[i];
+    }
 
     PG_TRY();
     {
-        next = parser_next(parser);
+
+        next = parser_next(parser, values, isnull);
     }
     PG_CATCH();
     {
         parser_close(parser);
+        pfree(isnull);
+        pfree(values);
         PG_RE_THROW();
     }
     PG_END_TRY();
 
     if(next)
     {
-        HeapTuple tuple = heap_form_tuple(parser->meta->tupdesc, parser->values, parser->isnull);
+        HeapTuple tuple = heap_form_tuple(parser->meta->tupdesc, values, isnull);
 
         SRF_RETURN_NEXT(funcctx, HeapTupleGetDatum(tuple));
     }
 
     parser_close(parser);
+    pfree(isnull);
+    pfree(values);
     SRF_RETURN_DONE(funcctx);
 }
