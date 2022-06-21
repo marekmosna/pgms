@@ -42,7 +42,7 @@ CREATE FUNCTION precursor_mz_correction(float4[]) RETURNS float4   AS 'MODULE_PA
 --- @param float4 mass power (default value 0.0)
 --- @param float4 intenzity power (default value 1.0)
 --- @return modified cosine similarity score
-CREATE FUNCTION cosine_modified(spectrum, spectrum, float4, float4=0.1, float4=0.0, float4=1.0) RETURNS float4 AS 'MODULE_PATHNAME' LANGUAGE C IMMUTABLE PARALLEL SAFE STRICT COST 1000;
+CREATE FUNCTION cosine_modified(spectrum, spectrum, float4, float4=0.1, float4=0.0, float4=1.0) RETURNS float4 AS 'MODULE_PATHNAME', 'modified_cosine' LANGUAGE C IMMUTABLE PARALLEL SAFE STRICT COST 1000;
 
 --- Compute intersection of masses as similarity score
 --- @param spectrum reference spectrum
