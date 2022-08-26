@@ -18,112 +18,36 @@
 
 #include <postgres.h>
 #include <fmgr.h>
-#include <common/shortest_dec.h>
-#include <errno.h>
+#include <catalog/pg_type.h>
+#include <utils/lsyscache.h>
 
 
 PG_FUNCTION_INFO_V1(spectrum_input);
 Datum spectrum_input(PG_FUNCTION_ARGS)
 {
     char *data = PG_GETARG_CSTRING(0);
+    Oid	infuncid;
+    Oid ioparams;
+    FmgrInfo infuncinfo;
 
-    size_t count = 0;
-
-    for(char *buffer = data; *buffer != '\0'; buffer++)
-        if(*buffer == ':')
-            count++;
-
-    size_t size = count * 2* sizeof(float4) + VARHDRSZ;
-    void *result = palloc0(size);
-    SET_VARSIZE(result, size);
-
-    float4 *values = (float4 *) VARDATA(result);
-    char *buffer = data;
-
-    for(size_t i = 0; i < count; i++)
-    {
-        for(int j = 0; j < 2; j++)
-        {
-            char *end;
-            errno = 0;
-            values[j * count + i] = strtof(buffer, &end);
-
-            if(errno != 0 || *end != (j == 0 ? ':' : i == count - 1 ? '\0' : ','))
-                ereport(ERROR, (errcode(ERRCODE_INVALID_TEXT_REPRESENTATION), errmsg("malformed spectrum literal")));
-
-            buffer = end + 1;
-        }
-    }
-
-    PG_RETURN_POINTER(result);
+    elog(DEBUG1, "spectrum_input: %s", data);
+    getTypeInputInfo(FLOAT4ARRAYOID, &infuncid, &ioparams);
+    fmgr_info(infuncid, &infuncinfo);
+    elog(DEBUG1, "in_fnc(%d), ioparams(%d)",infuncid, ioparams);
+    PG_RETURN_DATUM(InputFunctionCall(&infuncinfo, data, ioparams, -1));
 }
 
 
 PG_FUNCTION_INFO_V1(spectrum_output);
 Datum spectrum_output(PG_FUNCTION_ARGS)
 {
-    void *spectrum = PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+    Oid	outfuncid;
+    bool ioparams;
+    FmgrInfo outfuncinfo;
 
-    size_t count = (VARSIZE(spectrum) - VARHDRSZ) / sizeof(float4) / 2;
-    float4 *values = (float4 *) VARDATA(spectrum);
-
-    char *result = (char *) palloc0(count ? 2 * count * (FLOAT_SHORTEST_DECIMAL_LEN + 1) : 1);
-    char *buffer = result;
-
-    for(size_t i = 0; i < count; i++)
-    {
-        buffer += float_to_shortest_decimal_bufn(values[i], buffer);
-        *(buffer++) = ':';
-        buffer += float_to_shortest_decimal_bufn(values[count + i], buffer);
-        *(buffer++) = ',';
-    }
-
-    *(count ? buffer - 1 : buffer) = '\0';
-
-    PG_FREE_IF_COPY(spectrum, 0);
-    PG_RETURN_CSTRING(result);
-}
-
-PG_FUNCTION_INFO_V1(spectrum_max_intensity);
-Datum spectrum_max_intensity(PG_FUNCTION_ARGS)
-{
-    void *spectrum = PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
-
-    size_t size = (VARSIZE(spectrum) - VARHDRSZ) / sizeof(float4);
-    size_t count = size / 2;
-    float4 *values = (float4 *) VARDATA(spectrum);
-    float4 max = 0.0f;
-
-    for(size_t i = count; i < size; i++)
-    {
-        if(max < values[i])
-            max = values[i];
-    }
-
-    PG_RETURN_FLOAT4(max);
-}
-
-PG_FUNCTION_INFO_V1(spectrum_normalize);
-Datum spectrum_normalize(PG_FUNCTION_ARGS)
-{
-    void *spectrum = PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
-    size_t size = (VARSIZE(spectrum) - VARHDRSZ) / sizeof(float4);
-    size_t count = size / 2;
-    float4 *values = (float4 *) VARDATA(spectrum);
-    Datum result = (Datum) palloc0(VARSIZE(spectrum));
-    float4* result_values = (float4 *) VARDATA(result);
-    float4 max = DatumGetFloat4(
-        DirectFunctionCall1(spectrum_max_intensity
-            , PG_GETARG_DATUM(0))
-    );
-
-    SET_VARSIZE(result, VARSIZE(spectrum));
-
-    for(size_t i = 0; i < count; i++)
-    {
-        result_values[i] = values[i];
-        result_values[count + i] = values[count + i] / max;
-    }
-
-    PG_RETURN_DATUM(result);
+    elog(DEBUG1, "spectrum_output");
+    getTypeOutputInfo(FLOAT4ARRAYOID, &outfuncid, &ioparams);
+    fmgr_info(outfuncid, &outfuncinfo);
+    elog(DEBUG1, "out_fnc(%d), ioparams(%d)",outfuncid, ioparams);
+    PG_RETURN_CSTRING(OutputFunctionCall(&outfuncinfo, PG_GETARG_DATUM(0)));
 }

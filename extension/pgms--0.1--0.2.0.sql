@@ -29,10 +29,28 @@
 CREATE FUNCTION load_from_json(jsonb) RETURNS SETOF record AS 'MODULE_PATHNAME' LANGUAGE C IMMUTABLE PARALLEL SAFE STRICT;
 
 --- In case of float4 mass precursor function just returns its value. In case of array of values the function returns the 1st value of array
---- @param float4/float4[] mass precursor
+--- @param float4 mass precursor
 --- @return valid mass precursor
-CREATE FUNCTION precursor_mz_correction(float4) RETURNS float4   AS 'MODULE_PATHNAME','precursor_mz_correction_float' LANGUAGE C IMMUTABLE PARALLEL SAFE STRICT;
-CREATE FUNCTION precursor_mz_correction(float4[]) RETURNS float4   AS 'MODULE_PATHNAME','precursor_mz_correction_array' LANGUAGE C IMMUTABLE PARALLEL SAFE STRICT;
+CREATE OR REPLACE FUNCTION precursor_mz_correction(f float4) 
+  RETURNS float4 AS
+$BODY$
+BEGIN
+    return f;
+END;
+$BODY$
+  LANGUAGE plpgsql IMMUTABLE;
+
+--- In case of float4 mass precursor function just returns its value. In case of array of values the function returns the 1st value of array
+--- @param float4[] mass precursor
+--- @return valid mass precursor
+CREATE OR REPLACE FUNCTION precursor_mz_correction(a float4[]) 
+  RETURNS float4 AS
+$BODY$
+BEGIN
+    return a[1];
+END;
+$BODY$
+  LANGUAGE plpgsql IMMUTABLE;
 
 --- Compute modified cosine similarity score
 --- @param spectrum reference spectrum

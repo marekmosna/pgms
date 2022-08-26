@@ -16,7 +16,9 @@
  */
 
 #include "pgms.h"
+#include "spectrum.h"
 
+#include <funcapi.h>
 #include <utils/builtins.h>
 #include <catalog/pg_type.h>
 #if PG_VERSION_NUM >= 130000
@@ -24,13 +26,7 @@
 #else
     #include <utils/jsonapi.h>
 #endif
-#define CVECTOR_CUSTOM_MALLOC
-#define cvector_clib_free       pfree
-#define cvector_clib_malloc     palloc
-#define cvector_clib_realloc    repalloc
-#define CVECTOR_LOGARITHMIC_GROWTH
-
-#include "cvector.h"
+#include <nodes/pg_list.h>
 
 typedef struct
 {
@@ -70,14 +66,73 @@ static json_ctx_t* json_ctx_create(Jsonb* jb, TupleDesc td)
     return json_ctx;
 }
 
+static dummyret parser_set_column_array(json_ctx_t* ctx, AttInMetadata *attinmeta, Index columnIndex, List *l, size_t dim)
+{
+#define ArrayInnerTraversal(list, n, res)                   \
+    do {                                                    \
+        for(Index i = 0; i < (n); i++)                      \
+        {                                                   \
+            StringInfo record = (StringInfo) lfirst(        \
+                list_nth_cell((list), i)                    \
+            );                                              \
+            Pointer pbegin = StringInfoToCString(record);   \
+            Pointer pend = pbegin + record->len -1;         \
+                                                            \
+            NormalizeNumericSignSuffix(pbegin, pend);       \
+            appendStringInfoString((result), pbegin);       \
+            appendStringInfoCharMacro((result)              \
+                , i == (n) - 1 ? ' ' : ',');                \
+            pfree(record->data);                            \
+        }                                                   \
+    } while(false)
+
+    StringInfo result = makeStringInfo();
+
+    if(columnIndex < ColumnCount(attinmeta->tupdesc) && !ColumnIsDropped(attinmeta->tupdesc, columnIndex))
+    {
+        size_t count = list_length(l);
+        elog(DEBUG1, "%s of %d: sizeof %ld in %ld dimension"
+            , NameStr(*ColumnName(attinmeta->tupdesc, columnIndex))
+            , ColumnType(attinmeta->tupdesc, columnIndex)
+            , count
+            , dim);
+
+        appendStringInfoCharMacro(result, '{');
+        ListCell *cell = NULL;
+
+        foreach(cell, l)
+        {
+            List* ll = lfirst(cell);
+
+            appendStringInfoCharMacro(result, '{');
+            elog(DEBUG1, "count %d", list_length(ll));
+            ArrayInnerTraversal(ll, list_length(ll), result);
+            appendStringInfoCharMacro(result, '}');
+            appendStringInfoCharMacro(result, cell == list_tail(l) ? ' ' : ',');
+        }
+
+        appendStringInfoCharMacro(result, '}');
+
+        elog(DEBUG1, "Formed to: %s", StringInfoToCString(result));
+        ctx->values[columnIndex] = InputFunctionCall(&attinmeta->attinfuncs[columnIndex]
+            , StringInfoToCString(result)
+            , attinmeta->attioparams[columnIndex]
+            , attinmeta->atttypmods[columnIndex]);
+        ctx->isnull[columnIndex] = false;
+        pfree(result->data);
+        pfree(result);
+    }
+#undef ArrayInnerTraversal
+}
+
 void json_ctx_next(AttInMetadata *attinmeta, json_ctx_t *json_ctx)
 {
     StringInfo data = makeStringInfo();
     TupleDesc tupdesc = attinmeta->tupdesc;
     Index idx = tupdesc->natts;
     size_t elem_cnt = 0;
-    spectrum_t ion;
-    cvector_vector_type(spectrum_t) spectrum = NULL;
+    List *mzs = NIL;
+    List *peaks = NIL;
     int ions_cnt = 0;
 
     do
@@ -98,24 +153,21 @@ void json_ctx_next(AttInMetadata *attinmeta, json_ctx_t *json_ctx)
             case WJB_ELEM:
                 if(tupdesc->attrs[idx].atttypid == spectrumOid)
                 {
+                    StringInfo record = makeStringInfo();
                     char *tmp = DatumGetCString(DirectFunctionCall1(numeric_out, NumericGetDatum(val.val.numeric)));
-                    Datum result = DirectFunctionCall1(float4in, CStringGetDatum(tmp));
 
                     elog(DEBUG1, "WJB_ELEM %s", tmp);
 
+                    appendStringInfoString(record, tmp);
                     if(elem_cnt++ % 2 == 0)
                     {
-                        ion.mz = DatumGetFloat4(result);
-                        ion.intenzity = 0.0f;
+                        mzs = lappend(mzs, record);
                     }
                     else
                     {
-                        ion.intenzity = DatumGetFloat4(result);
-                        cvector_push_back(spectrum, ion);
+                        peaks = lappend(peaks, record);
                         ions_cnt--;
                     }
-
-                    pfree(tmp);
                 }
                 break;
             case WJB_VALUE:
@@ -139,7 +191,6 @@ void json_ctx_next(AttInMetadata *attinmeta, json_ctx_t *json_ctx)
                 {
                     ions_cnt = json_ctx->it->nElems;
                     elog(DEBUG1, "WJB_BEGIN_ARRAY of %d", json_ctx->it->nElems);
-                    cvector_reserve(spectrum, ions_cnt);
                 }
                 if(idx == tupdesc->natts)
                     json_ctx->state = WJB_BEGIN_OBJECT;
@@ -150,9 +201,19 @@ void json_ctx_next(AttInMetadata *attinmeta, json_ctx_t *json_ctx)
                     && ions_cnt == 0)
                 {
                     elog(DEBUG1, "WJB_END_ARRAY");
-                    qsort(spectrum, cvector_size(spectrum), sizeof(spectrum_t), spectrum_cmp);
-                    set_spectrum(attinmeta, json_ctx->values, json_ctx->isnull, spectrum, cvector_size(spectrum));
-                    cvector_free(spectrum);
+
+                    if(mzs && peaks)
+                    {
+                        List *spectrums = NIL;
+                        Datum result;
+
+                        spectrums = lappend(spectrums, mzs);
+                        spectrums = lappend(spectrums, peaks);
+                        parser_set_column_array(json_ctx, attinmeta, idx, spectrums, SPECTRUM_ARRAY_DIM);
+                        list_free_deep(mzs);
+                        list_free_deep(peaks);
+                        list_free(spectrums);
+                    }
                     idx = tupdesc->natts;
                 }
                 break;

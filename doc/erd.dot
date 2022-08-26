@@ -1,0 +1,40 @@
+graph ER {
+    fontname="Helvetica,Arial,sans-serif"
+    node [fontname="Helvetica,Arial,sans-serif"]
+    edge [fontname="Helvetica,Arial,sans-serif"]
+    layout=neato
+
+    N[shape=none label=<<table cellborder="0" border="0" cellspacing="0">
+    <tr><td color="none" colspan="2" width="90" fixedsize="true"></td><td border="1" rowspan="2" colspan="2" cellpadding="0" style="dashed" width="70" fixedsize="true">PARAMS</td></tr>
+    <tr><td sides="LT" border="1" colspan="2"></td></tr>
+    <tr><td sides="LR" border="1" rowspan="2" colspan="3" width="150" fixedsize="true">origin data</td><td width="10" fixedsize="true"></td></tr>
+    <tr><td></td></tr>
+    <tr><td sides="LBR" border="1" colspan="3"></td><td height="8" fixedsize="true"><!--put height in seperate cell to avoid specify fixed width--></td></tr>
+    </table>>];
+    node [shape=box]; audits; "data source"; ions; "normalized spectrum"; "spectrum range";
+    node [shape=ellipse]; format; source; spectrum; ion; peak;
+    node [shape=diamond,style=filled,color=lightgrey]; "DS-D";"D-IONS"; "D-NORM"; "D-R";"DS-IONS";
+
+
+    "data source" -- source;
+    "data source" -- format;
+    N -- spectrum [len=1.5];
+    ions -- peak;
+    ions -- ion;
+    
+    "data source" -- "DS-D" [label="1", len=1.0];
+    "DS-D" -- N [label="n", len=1.5];
+
+    "data source" -- "DS-IONS" [label="1"];
+    "DS-IONS" -- ions [label="n", len=1.5];
+
+    N -- "D-IONS" [label="1"];
+    N -- "D-NORM" [label="1"];
+    N -- "D-R" [label="1", len=1.5];
+    "D-NORM" -- "normalized spectrum" [label="1"];
+    "D-IONS" -- ions [label="n"];
+    "D-R" -- "spectrum range" [label="1", len=1.5];
+
+    label = "\n\nPGMS Relation Diagram";
+    fontsize=20;
+}
