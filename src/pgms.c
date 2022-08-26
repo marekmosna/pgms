@@ -17,19 +17,18 @@
  */
 
 #include "pgms.h"
+#include "mgf.h"
 
-#include <postgres.h>
-#include <fmgr.h>
 #include <catalog/namespace.h>
-#include <catalog/pg_type.h>
 #include <utils/syscache.h>
-#include <utils/array.h>
+#include <libpq/libpq-fs.h>
+#include <catalog/pg_type.h>
+#include <storage/large_object.h>
+#include <funcapi.h>
 
 PG_MODULE_MAGIC;
 
-
 Oid spectrumOid;
-
 
 void _PG_init()
 {
@@ -37,89 +36,105 @@ void _PG_init()
     spectrumOid = GetSysCacheOid2(TYPENAMENSP, Anum_pg_type_oid, PointerGetDatum("spectrum"), ObjectIdGetDatum(spaceid));
 }
 
-char* reverse_postfix_sign(char* value)
+PG_FUNCTION_INFO_V1(load_mgf_lo);
+Datum load_mgf_lo(PG_FUNCTION_ARGS)
 {
-    size_t length = 0;
-    char *psign = NULL;
-    char* pbegin = value;
-    
-    if(!value || *value == '\0')
-        goto end;
+    bool next;
+    FuncCallContext *funcctx = NULL;
+    struct Parser* parser = NULL;
 
-    length = strlen(value);
-    psign = value + length - 1;
-
-    while(likely(pbegin != psign) && isspace((unsigned char) *pbegin))
-        pbegin++;
-
-    while(likely(pbegin != psign) && isspace((unsigned char) *psign))
-        psign--;
-
-    if(unlikely(psign == pbegin))
-        goto end;
-    else if(*psign == POSITIVE_SIGN)
-        *psign = '\0';
-    else if(*psign == NEGATIVE_SIGN)
+    if(SRF_IS_FIRSTCALL())
     {
-        while(psign != pbegin)
-        {
-            char c = *(psign - 1);
-            *psign = c;
-            *(--psign) = NEGATIVE_SIGN;
-        }
+        MemoryContext oldcontext = NULL;
+        TupleDesc tuple_desc = NULL;
+        AttInMetadata *attinmeta = NULL;
+
+        funcctx = SRF_FIRSTCALL_INIT();
+        oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
+
+        if(get_call_result_type(fcinfo, NULL, &tuple_desc) != TYPEFUNC_COMPOSITE)
+            ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED)
+                , errmsg("unsupported return type")));
+
+        funcctx->attinmeta = TupleDescGetAttInMetadata(tuple_desc);
+        parser = parser_init_lob(
+            inv_open(PG_GETARG_OID(0), INV_READ, funcctx->multi_call_memory_ctx)
+            , funcctx->attinmeta
+        );
+        parser_globals(parser);
+        funcctx->user_fctx = (void*)parser;
+        MemoryContextSwitchTo(oldcontext);
     }
 
-end:
-    elog(DEBUG1, "rotated: %s", value);
-    return value;
-}
+    funcctx = SRF_PERCALL_SETUP();
+    parser = (struct Parser*) funcctx->user_fctx;
 
-PG_FUNCTION_INFO_V1(precursor_mz_correction_float);
-Datum precursor_mz_correction_float(PG_FUNCTION_ARGS)
-{
-    PG_RETURN_DATUM(PG_GETARG_DATUM(0));
-}
-
-PG_FUNCTION_INFO_V1(precursor_mz_correction_array);
-Datum precursor_mz_correction_array(PG_FUNCTION_ARGS)
-{
-    ArrayType *array = PG_GETARG_ARRAYTYPE_P(0);
-
-    PG_RETURN_DATUM(
-        ARR_SIZE(array) > 0 
-        ? Float4GetDatum(*(float4*)ARR_DATA_PTR(array))
-        : 0
-    );
-}
-
-void set_spectrum(AttInMetadata *attinmeta, Datum *values, bool *isnull, spectrum_t* data, int count)
-{
-    TupleDesc tupdesc = attinmeta->tupdesc;
-    size_t size = count * sizeof(spectrum_t) + VARHDRSZ;
-    void *result = palloc0(size);
-    float4* result_data = (float4*) VARDATA(result);
-
-    SET_VARSIZE(result, size);
-
-    for(size_t i = 0; i < count; i++)
+    PG_TRY();
     {
-        result_data[i] = data[i].mz;
-        result_data[count + i] = data[i].intenzity;
+        next = parser_next(parser);
+    }
+    PG_CATCH();
+    {
+        parser_close(parser);
+        PG_RE_THROW();
+    }
+    PG_END_TRY();
+
+    if(next)
+    {
+        SRF_RETURN_NEXT(funcctx, parser_get_tuple(parser));
     }
 
-    for(int idx = 0; idx < tupdesc->natts; idx++)
-    {
-        if(tupdesc->attrs[idx].atttypid == spectrumOid)
-        {
-            values[idx] = PointerGetDatum(result);
-            isnull[idx] = false;
-        }
-    }
+    parser_close(parser);
+    SRF_RETURN_DONE(funcctx);
 }
 
-int spectrum_cmp(const void* l,const void* r)
+PG_FUNCTION_INFO_V1(load_mgf_varchar);
+Datum load_mgf_varchar(PG_FUNCTION_ARGS)
 {
-    spectrum_t* l_value = (spectrum_t*)l;
-    spectrum_t* r_value = (spectrum_t*)r;
-    return l_value->mz > r_value->mz;
+    bool next;
+    FuncCallContext *funcctx = NULL;
+    struct Parser* parser = NULL;
+
+    if(SRF_IS_FIRSTCALL())
+    {
+        MemoryContext oldcontext = NULL;
+        TupleDesc tuple_desc = NULL;
+        AttInMetadata *attinmeta = NULL;
+
+        funcctx = SRF_FIRSTCALL_INIT();
+        oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
+
+        if(get_call_result_type(fcinfo, NULL, &tuple_desc) != TYPEFUNC_COMPOSITE)
+            ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED)
+                , errmsg("unsupported return type")));
+
+        funcctx->attinmeta = TupleDescGetAttInMetadata(tuple_desc);
+        parser = parser_init_varchar(PG_GETARG_VARCHAR_P(0), funcctx->attinmeta);
+        parser_globals(parser);
+        funcctx->user_fctx = (void*)parser;
+        MemoryContextSwitchTo(oldcontext);
+    }
+
+    funcctx = SRF_PERCALL_SETUP();
+    parser = (struct Parser*) funcctx->user_fctx;
+
+    PG_TRY();
+    {
+        next = parser_next(parser);
+    }
+    PG_CATCH();
+    {
+        parser_close(parser);
+        PG_RE_THROW();
+    }
+    PG_END_TRY();
+
+    if(next)
+    {
+        SRF_RETURN_NEXT(funcctx, parser_get_tuple(parser));
+    }
+
+    parser_close(parser);
+    SRF_RETURN_DONE(funcctx);
 }

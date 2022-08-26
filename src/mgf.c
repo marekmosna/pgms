@@ -15,31 +15,19 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include "mgf.h"
 #include "pgms.h"
 
-#include <funcapi.h>
 #include <utils/builtins.h>
-#include <utils/rangetypes.h>
-#include <storage/large_object.h>
-#include <libpq/libpq-fs.h>
 #include <catalog/pg_type.h>
-
-#include "pgms.h"
-
-#define CVECTOR_CUSTOM_MALLOC
-#define cvector_clib_free       pfree
-#define cvector_clib_malloc     palloc
-#define cvector_clib_realloc    repalloc
-#define CVECTOR_LOGARITHMIC_GROWTH
-
-#include "cvector.h"
+#include <storage/large_object.h>
+#include <funcapi.h>
+#include <nodes/pg_list.h>
 
 #define BEGIN_IONS_STR          "BEGIN IONS"
 #define END_IONS_STR            "END IONS"
-#define CHARGE_STR              "CHARGE"
 #define COMMENT_STR             "#;!/"
 #define BUFFER_SIZE             (1 << 20) //1MB
-#define INITIAL_SPECTRUM_SIZE   200
 
 typedef enum 
 {
@@ -50,228 +38,85 @@ typedef enum
 }
 ParserState;
 
-typedef struct
+typedef struct Parser
 {
-    LargeObjectDesc*    file;
-    int                 pos;
-    int                 size;
-    char*               data;
-    Datum*              g_values;
-    bool*               g_isnull;
-    AttInMetadata *     meta;
+    LargeObjectDesc     *file;
+    Index               pos;
+    size_t              size;
+    Pointer             data;
+    Datum               *values;
+    bool                *isnull;
+    AttInMetadata       *meta;
     ParserState         status;
-}
-ParserData, *Parser;
-
-static bool is_blank(const char* s)
-{
-    Assert(s);
-
-    while(true)
-    {
-        if(isgraph(*s))
-            return false;
-
-        if(*s == '\0' || *s == '\n')
-            return true;
-
-        s++;
-    }
-}
+} ParserData;
 
 static bool is_comment(StringInfo str)
 {
+    Index idx = 0;
     size_t comments_lenght = sizeof(COMMENT_STR) - 1;
+    Pointer pbegin = StringInfoToCString(str);
+    Pointer pend = StringInfoToCString(str) + str->len;
 
-    for(size_t i = 0; i < comments_lenght; ++i)
-        if(str->data[0] == COMMENT_STR[i])
-        {
-            elog(DEBUG1, "Comment: %s", str->data + 1);
-            return true;
-        }
-
-    return false;
-}
-
-static void set_parameter(AttInMetadata *attinmeta, Datum *values, bool *isnull, char *name, char *value)
-{
-    TupleDesc tupdesc = attinmeta->tupdesc;
-
-    int idx = 0;
-
-    while(idx < tupdesc->natts
-        && !TupleDescAttr(tupdesc, idx)->attisdropped
-        && strcmp(name, NameStr(TupleDescAttr(tupdesc, idx)->attname))
-        )
+    TrailLeftSpaces(pbegin, pend);
+    while(idx < comments_lenght && *pbegin != COMMENT_STR[idx])
         idx++;
 
-    if(idx == tupdesc->natts || tupdesc->attrs[idx].atttypid == spectrumOid)
-        return;
-
-    Oid typid = TupleDescAttr(tupdesc, idx)->atttypid;
-
-    elog(DEBUG1, "param %s with typeiod: %d", name, typid);
-
-    if(typid == INT4RANGEOID || typid == INT8RANGEOID || typid == NUMRANGEOID)
-    { // special treatment of mgf ranges
-        char *ptr = value;
-
-        while(*ptr != '\0' && isspace((unsigned char) *ptr))
-            ptr++;
-
-        if(*ptr != '(' && *ptr != '[' && strncmp(ptr, "empty", 5))
-        {
-            char *lbound = value;
-            char *rbound = value;
-
-            ptr = strchr(ptr + 1, '-');
-
-            if(ptr != NULL)
-            {
-                lbound[ptr - value] = '\0';
-                rbound = ptr + 1;
-            }
-
-            Datum (*in)(PG_FUNCTION_ARGS) = typid == NUMRANGEOID ? numeric_in : typid == INT4RANGEOID ? int4in : int8in;
-            Datum lval = DirectFunctionCall3(in, CStringGetDatum(lbound), ObjectIdGetDatum(InvalidOid), Int32GetDatum(-1));
-            Datum rval = DirectFunctionCall3(in, CStringGetDatum(rbound), ObjectIdGetDatum(InvalidOid), Int32GetDatum(-1));
-
-            RangeBound lower = { .infinite = false, .inclusive = true, .lower = true, .val = lval };
-            RangeBound upper = { .infinite = false, .inclusive = true, .lower = false, .val = rval };
-
-            TypeCacheEntry *typcache = lookup_type_cache(typid, TYPECACHE_RANGE_INFO);
-            values[idx] = RangeTypePGetDatum(make_range(typcache, &lower, &upper, false));
-            isnull[idx] = false;
-
-            return;
-        }
-    }
-    else if(typid == INT4OID || typid == NUMERICOID || typid == INT8OID || typid == FLOAT4OID || typid == FLOAT8OID)
-    { // special treatment of postfix sign
-        reverse_postfix_sign(value);
-    }
-    else if(typid == FLOAT4ARRAYOID || typid == FLOAT8ARRAYOID || typid == INT4ARRAYOID || typid == INT8ARRAYOID ||typid == NUMERICARRAYOID)
-    { // special treat for array of numbers
-        cvector_vector_type(char*)  tkns = NULL;
-        char                        *pbegin = value;
-        char                        *pend = NULL;
-        bool                        spacing = false;
-        size_t                      count = 0;
-
-        pend = value + strlen(value);
-
-        while(likely(pbegin != pend) && isspace((unsigned char) *pbegin))
-            pbegin++;
-
-        while(likely(pbegin != pend) && isspace((unsigned char) *pend))
-            pend--;
-
-        if(unlikely(pend == pbegin))
-        {
-            values[idx] = (Datum)0;
-            isnull[idx] = true;
-            return;
-        }
-
-        cvector_reserve(tkns, 50);
-        cvector_push_back(tkns, pbegin);
-
-        for (value = pbegin; value != pend; value++)
-        {
-            if(unlikely(isspace(*value)))
-            {
-                spacing = true;
-            }
-            else if(unlikely(spacing))
-            {
-                *(value - 1) = '\0';
-                cvector_push_back(tkns, value);
-                spacing = false;
-            }
-        }
-
-        StringInfo array = makeStringInfo();
-
-        count = cvector_size(tkns);
-        appendStringInfoCharMacro(array, '{');
-        for(size_t i = 0; i < count; i++)
-        {
-            reverse_postfix_sign(tkns[i]);
-            appendStringInfoString(array, tkns[i]);
-            appendStringInfoCharMacro(array, i == count - 1 ? '}' : ',');
-        }
-        values[idx] = InputFunctionCall(&attinmeta->attinfuncs[idx], array->data, attinmeta->attioparams[idx], attinmeta->atttypmods[idx]);
-        isnull[idx] = false;
-        pfree(array->data);
-        pfree(array);
-        return;
-    }
-
-    values[idx] = InputFunctionCall(&attinmeta->attinfuncs[idx], value, attinmeta->attioparams[idx], attinmeta->atttypmods[idx]);
-    isnull[idx] = false;
+    return idx != comments_lenght;
 }
 
-static Parser parser_init_lob(LargeObjectDesc* in)
+static Index find_column_by_name(TupleDesc tuple, const char* name)
 {
-    Parser parser = palloc(sizeof(ParserData));
+    Index idx = 0;
 
-    parser->pos = 0;
-    parser->file = in;
-    parser->size = 0;
-    parser->data = palloc(BUFFER_SIZE);
-    parser->g_values = NULL;
-    parser->g_isnull = NULL;
-    parser->meta = NULL;
-    parser->status = BEGIN;
+    while(idx < ColumnCount(tuple) && namestrcmp(ColumnName(tuple, idx), name))
+        idx++;
 
-    return parser;
+    return idx;
 }
 
-static Parser parser_init_varchar(VarChar* in)
+static Index find_column_by_oid(TupleDesc tuple, Oid oid)
 {
-    Parser parser = palloc(sizeof(ParserData));
+    Index idx = 0;
 
-    parser->pos = 0;
-    parser->file = NULL;
-    parser->size = VARSIZE(in) - VARHDRSZ;
-    parser->data = palloc(parser->size);
-    memcpy(parser->data, VARDATA(in), parser->size);
-    parser->g_values = NULL;
-    parser->g_isnull = NULL;
-    parser->meta = NULL;
-    parser->status = BEGIN;
+    while(idx < ColumnCount(tuple) && ColumnType(tuple, idx) != oid)
+        idx++;
 
-    return parser;
+    return idx;
 }
 
-static void parser_close(Parser parser)
+static List* split(Pointer data, const char* delimiter)
 {
-    pfree(parser->data);
+    List* result = NIL;
 
-    if(parser->file)
+    elog(DEBUG1, "splitting %s", data);
+    for(Pointer token = strtok(data, delimiter)
+        ; PointerIsValid(token)
+        ; token = strtok(NULL, delimiter))
     {
-        close_lo_relation(true);
-        inv_close(parser->file);
+        StringInfo record = makeStringInfo();
+
+        appendStringInfoString(record, token);
+        result = lappend(result, record);
     }
 
-    pfree(parser->g_values);
-    pfree(parser->g_isnull);
-    pfree(parser);
+    elog(DEBUG1, "splitted %d", list_length(result));
+    return result;
 }
 
-static int read_line(Parser parser, StringInfo buffer)
+static int read_line(struct Parser* parser, StringInfo buffer)
 {
-    int cnt = 0;
+    size_t cnt = 0;
     bool white_only = true;
 
     do
     {
         char c = '\0';
 
-        if(parser->pos == parser->size && parser->file != NULL)
+        if(parser->pos == parser->size && PointerIsValid(parser->file))
         {
             parser->pos = 0;
             parser->size = inv_read(parser->file, parser->data, BUFFER_SIZE);
+            elog(DEBUG1, "read %ld bytes", parser->size);
         }
 
         if(parser->pos == parser->size)
@@ -299,33 +144,184 @@ static int read_line(Parser parser, StringInfo buffer)
     }
     while(true);
 
-    elog(DEBUG1, "read line: %s", buffer->data);
     return white_only ? 0 : cnt;
 }
 
+static struct Parser* parser_init(AttInMetadata *meta, size_t size)
+{
+    struct Parser* parser = (struct Parser*) palloc(sizeof(ParserData));
 
-static void parser_global_setup(Parser parser, AttInMetadata *meta)
+    parser->pos = 0;
+    parser->file = NULL;
+    parser->size = size;
+    parser->data = palloc(parser->size);
+    parser->values = palloc(ColumnCount(meta->tupdesc) * sizeof(Datum));
+    parser->isnull = palloc(ColumnCount(meta->tupdesc) * sizeof(bool));
+    parser->meta = meta;
+    parser->status = BEGIN;
+
+    for(Index i = 0; i < ColumnCount(meta->tupdesc); i++)
+    {
+        parser->values[i] = (Datum) 0;
+        parser->isnull[i] = true;
+    }
+
+    return parser;
+}
+
+struct Parser* parser_init_lob(struct LargeObjectDesc* in, struct AttInMetadata *meta)
+{
+    struct Parser* parser = parser_init(meta, BUFFER_SIZE);
+
+    parser->file = in;
+    parser->size = 0;
+
+    return parser;
+}
+
+struct Parser* parser_init_varchar(VarChar* in, struct AttInMetadata *meta)
+{
+    struct Parser* parser = parser_init(meta, VARSIZE(in) - VARHDRSZ);
+
+    memcpy(parser->data, VARDATA(in), parser->size);
+
+    return parser;
+}
+
+dummyret parser_close(struct Parser* parser)
+{
+    pfree(parser->data);
+
+    if(parser->file)
+    {
+        close_lo_relation(true);
+        inv_close(parser->file);
+    }
+
+    pfree(parser->values);
+    pfree(parser->isnull);
+    pfree(parser);
+}
+
+static dummyret parser_set_column_value(struct Parser* parser, Index columnIndex, StringInfo value)
+{
+    if(columnIndex < ColumnCount(parser->meta->tupdesc) && !ColumnIsDropped(parser->meta->tupdesc, columnIndex))
+    {
+        elog(DEBUG1, "%s of %d: %s"
+            , NameStr(*ColumnName(parser->meta->tupdesc, columnIndex))
+            , ColumnType(parser->meta->tupdesc, columnIndex)
+            , StringInfoToCString(value));
+
+        if(IsColumnNumericValue(parser->meta->tupdesc, columnIndex))
+        { // treatment for numeric suffix sign notation
+            Pointer pbegin = StringInfoToCString(value);
+            Pointer psign = pbegin + value->len - 1;
+
+            NormalizeNumericSignSuffix(pbegin, psign);
+        }
+
+        parser->values[columnIndex] = InputFunctionCall(&parser->meta->attinfuncs[columnIndex]
+            , StringInfoToCString(value)
+            , parser->meta->attioparams[columnIndex]
+            , parser->meta->atttypmods[columnIndex]);
+        parser->isnull[columnIndex] = false;
+    }
+}
+
+static dummyret parser_set_column_array(struct Parser* parser, Index columnIndex, List *l, size_t dim)
+{
+#define ArrayInnerTraversal(list, n, res)                   \
+    do {                                                    \
+        for(Index i = 0; i < (n); i++)                      \
+        {                                                   \
+            StringInfo record = (StringInfo) lfirst(        \
+                list_nth_cell((list), i)                    \
+            );                                              \
+            Pointer pbegin = StringInfoToCString(record);   \
+            Pointer pend = pbegin + record->len -1;         \
+                                                            \
+            NormalizeNumericSignSuffix(pbegin, pend);       \
+            appendStringInfoString((result), pbegin);       \
+            appendStringInfoCharMacro((result)              \
+                , i == (n) - 1 ? ' ' : ',');                \
+            pfree(record->data);                            \
+        }                                                   \
+    } while(false)
+
+    StringInfo result = makeStringInfo();
+
+    if(columnIndex < ColumnCount(parser->meta->tupdesc) && !ColumnIsDropped(parser->meta->tupdesc, columnIndex))
+    {
+        size_t count = list_length(l);
+        elog(DEBUG1, "%s of %d: sizeof %ld in %ld dimension"
+            , NameStr(*ColumnName(parser->meta->tupdesc, columnIndex))
+            , ColumnType(parser->meta->tupdesc, columnIndex)
+            , count
+            , dim);
+
+        appendStringInfoCharMacro(result, '{');
+        if(dim > 1)
+        {
+            ListCell *cell = NULL;
+
+            foreach(cell, l)
+            {
+                List* ll = lfirst(cell);
+
+                appendStringInfoCharMacro(result, '{');
+                ArrayInnerTraversal(ll, list_length(ll), result);
+                appendStringInfoCharMacro(result, '}');
+                appendStringInfoCharMacro(result, cell == list_tail(l) ? ' ' : ',');
+            }
+        }
+        else
+            ArrayInnerTraversal(l, list_length(l), result);
+
+        appendStringInfoCharMacro(result, '}');
+
+        elog(DEBUG1, "Formed to: %s", StringInfoToCString(result));
+        parser->values[columnIndex] = InputFunctionCall(&parser->meta->attinfuncs[columnIndex]
+            , StringInfoToCString(result)
+            , parser->meta->attioparams[columnIndex]
+            , parser->meta->atttypmods[columnIndex]);
+        parser->isnull[columnIndex] = false;
+        pfree(result->data);
+        pfree(result);
+    }
+#undef ArrayInnerTraversal
+}
+
+static dummyret parser_set_parameter(struct Parser* parser, const char* name, const char* s)
+{
+    Index idx = 0;
+    StringInfo value = makeStringInfo();
+
+    appendStringInfoString(value, s);
+    idx = find_column_by_name(parser->meta->tupdesc, name);
+
+    if(IsColumnNumericArray(parser->meta->tupdesc, idx))
+    {
+        List *l = split(StringInfoToCString(value), " ");
+        parser_set_column_array(parser, idx, l, 1);
+        list_free_deep(l);
+    }
+    else
+        parser_set_column_value(parser, idx, value);
+    pfree(value->data);
+    pfree(value);
+}
+
+dummyret parser_globals(struct Parser* parser)
 {
     StringInfo line = makeStringInfo();
 
-    Assert(meta);
     Assert(parser);
-
-    parser->meta = meta;
-    parser->g_values = palloc(meta->tupdesc->natts * sizeof(Datum));
-    parser->g_isnull = palloc(meta->tupdesc->natts * sizeof(bool));
-
-    for(int i = 0; i < meta->tupdesc->natts; i++)
-    {
-        parser->g_values[i] = (Datum) NULL;
-        parser->g_isnull[i] = true;
-    }
 
     while(true)
     {
         int result = read_line(parser, line);
         bool bcomment = false;
-        char* eq = NULL;
+        Pointer  eq = NULL;
 
         if(result == EOF)
             break;
@@ -334,16 +330,15 @@ static void parser_global_setup(Parser parser, AttInMetadata *meta)
 
         bcomment = is_comment(line);
 
-        if(!bcomment && parser->status == BEGIN && !strcmp (BEGIN_IONS_STR,line->data))
+        if(!bcomment && parser->status == BEGIN && !strcmp (BEGIN_IONS_STR,StringInfoToCString(line)))
         {
             parser->status = BEGIN_IONS;
             break;
         }
-        else if(!bcomment && parser->status == BEGIN &&((eq = strchr(line->data, '=')) != NULL))
+        else if(!bcomment && parser->status == BEGIN && PointerIsValid(eq = strchr(StringInfoToCString(line), '=')))
         {
             *eq++ = '\0';
-            set_parameter(parser->meta, parser->g_values, parser->g_isnull, line->data, eq);
-            elog(DEBUG1, "%s: %s", line->data, eq);
+            parser_set_parameter(parser, StringInfoToCString(line), eq);
         }
         resetStringInfo(line);
     }
@@ -352,19 +347,17 @@ static void parser_global_setup(Parser parser, AttInMetadata *meta)
     pfree(line);
 }
 
-static bool parser_next(Parser parser, Datum* l_values, bool* l_isnull)
+bool parser_next(struct Parser* parser)
 {
-    cvector_vector_type(spectrum_t) spectrum = NULL;
     StringInfo line = makeStringInfo();
+    List *mzs = NULL;
+    List *peaks = NULL;
 
     elog(DEBUG1, "parser_next");
     do
     {
         int result = 0;
-        float f1, f2;
-        char* pEnd1 = NULL;
-        char* pEnd2 = NULL;
-        char* eq = NULL;
+        Pointer  eq = NULL;
 
         result = read_line(parser, line);
 
@@ -384,42 +377,54 @@ static bool parser_next(Parser parser, Datum* l_values, bool* l_isnull)
             ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED)
                 , errmsg("Missplaced comment")));
         }
-        else if(parser->status == BEGIN && !strcmp (BEGIN_IONS_STR,line->data))
+        else if(parser->status == BEGIN && !strcmp (BEGIN_IONS_STR,StringInfoToCString(line)))
         {
             elog(DEBUG1, BEGIN_IONS_STR);
             parser->status = BEGIN_IONS;
-            cvector_reserve(spectrum, INITIAL_SPECTRUM_SIZE);
         }
-        else if(parser->status == BEGIN_IONS && !strcmp (END_IONS_STR,line->data))
+        else if(parser->status == BEGIN_IONS && !strcmp (END_IONS_STR,StringInfoToCString(line)))
         {
-            elog(DEBUG1, END_IONS_STR);
-            qsort(spectrum, cvector_size(spectrum), sizeof(spectrum_t), spectrum_cmp);
-            set_spectrum(parser->meta, l_values, l_isnull, spectrum, cvector_size(spectrum));
-            cvector_free(spectrum);
+            Index idx = 0;
+            List *spectrums = NULL;
+
+            if(mzs && peaks)
+            {
+                spectrums = lappend(spectrums, mzs);
+                spectrums = lappend(spectrums, peaks);
+                idx = find_column_by_oid(parser->meta->tupdesc, spectrumOid);
+                parser_set_column_array(parser, idx, spectrums, SPECTRUM_ARRAY_DIM);
+                list_free_deep(spectrums);
+            }
             parser->status = END_IONS;
         }
-        else if(parser->status == BEGIN_IONS && ((eq = strchr(line->data, '=')) != NULL))
+        else if(parser->status == BEGIN_IONS && PointerIsValid(eq = strchr(StringInfoToCString(line), '=')))
         {
             *eq++ = '\0';
-            set_parameter(parser->meta, l_values, l_isnull, line->data, eq);
-            elog(DEBUG1, "%s: %s", line->data, eq);
+            parser_set_parameter(parser, StringInfoToCString(line), eq);
         }
-        else if(parser->status == BEGIN_IONS
-            && ((f1 = strtof (line->data, &pEnd1)) || pEnd1 != line->data)
-            && ((f2 = strtof (pEnd1, &pEnd2))      || pEnd2 != pEnd1) 
-            )
+        else if(parser->status == BEGIN_IONS)
         {
-            if(!is_blank(pEnd2))
-                ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED)
-                    , errmsg("Unknown format line: %s", line->data)));
+            StringInfo value = makeStringInfo();
+            List *l = NIL;
 
-            *pEnd1++ = '\0';
-            elog(DEBUG1, "[%s %s]", line->data, pEnd1);
-            cvector_push_back(spectrum, ((spectrum_t){ f1, f2 }));
+            appendStringInfoString(value, StringInfoToCString(line));
+            l = split(StringInfoToCString(value), " ");
+
+            if(list_length(l) == SPECTRUM_ARRAY_DIM)
+            {
+                mzs = lappend(mzs, list_nth(l, 0));
+                peaks = lappend(peaks, list_nth(l, 1));
+            }
+            else 
+                ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED)
+                    , errmsg("Unknown format mass spectrum format: %s", StringInfoToCString(line))));
+
+            pfree(value->data);
+            pfree(value);
         }
         else
             ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED)
-                , errmsg("Unknown format line: %s", line->data)));
+                , errmsg("Unknown format line: %s", StringInfoToCString(line))));
 
         resetStringInfo(line);
     }
@@ -430,78 +435,9 @@ static bool parser_next(Parser parser, Datum* l_values, bool* l_isnull)
     return parser->status != END;
 }
 
-PG_FUNCTION_INFO_V1(load_from_mgf);
-Datum load_from_mgf(PG_FUNCTION_ARGS)
+Datum parser_get_tuple(struct Parser* parser)
 {
-    bool next;
-    FuncCallContext *funcctx = NULL;
-    Parser parser = NULL;
-    Datum* values = NULL;
-    bool* isnull = NULL;
-
-    if(SRF_IS_FIRSTCALL())
-    {
-        MemoryContext oldcontext = NULL;
-        TupleDesc tuple_desc = NULL;
-        Oid element_type;
-        AttInMetadata *attinmeta = NULL;
-
-        funcctx = SRF_FIRSTCALL_INIT();
-        oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
-
-        if(get_call_result_type(fcinfo, NULL, &tuple_desc) != TYPEFUNC_COMPOSITE)
-            ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED)
-                , errmsg("unsupported return type")));
-
-        funcctx->attinmeta = TupleDescGetAttInMetadata(tuple_desc);
-        element_type = get_fn_expr_argtype(fcinfo->flinfo, 0);
-
-        if(element_type == VARCHAROID)
-            parser = parser_init_varchar(PG_GETARG_VARCHAR_P(0));
-        else if(element_type == OIDOID)
-            parser = parser_init_lob(
-                inv_open(PG_GETARG_OID(0), INV_READ, funcctx->multi_call_memory_ctx)
-            );
-
-        parser_global_setup(parser, funcctx->attinmeta);
-        funcctx->user_fctx = (void*)parser;
-        MemoryContextSwitchTo(oldcontext);
-    }
-
-    funcctx = SRF_PERCALL_SETUP();
-    parser = (Parser) funcctx->user_fctx;
-    values = palloc(parser->meta->tupdesc->natts * sizeof(Datum));
-    isnull = palloc(parser->meta->tupdesc->natts * sizeof(bool));
-
-    for(int i = 0; i < parser->meta->tupdesc->natts; i++)
-    {
-        values[i] = parser->g_values[i];
-        isnull[i] = parser->g_isnull[i];
-    }
-
-    PG_TRY();
-    {
-
-        next = parser_next(parser, values, isnull);
-    }
-    PG_CATCH();
-    {
-        parser_close(parser);
-        pfree(isnull);
-        pfree(values);
-        PG_RE_THROW();
-    }
-    PG_END_TRY();
-
-    if(next)
-    {
-        HeapTuple tuple = heap_form_tuple(parser->meta->tupdesc, values, isnull);
-
-        SRF_RETURN_NEXT(funcctx, HeapTupleGetDatum(tuple));
-    }
-
-    parser_close(parser);
-    pfree(isnull);
-    pfree(values);
-    SRF_RETURN_DONE(funcctx);
+    return HeapTupleGetDatum(
+        heap_form_tuple(parser->meta->tupdesc, parser->values, parser->isnull)
+    );
 }

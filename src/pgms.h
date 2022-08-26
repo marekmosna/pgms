@@ -21,19 +21,55 @@
 #include <postgres.h>
 #include <funcapi.h>
 
-#define NEGATIVE_SIGN           '-'
-#define POSITIVE_SIGN           '+'
-
-typedef struct
-{
-   float4 mz;
-   float4 intenzity;
-} spectrum_t;
-
 extern Oid spectrumOid;
 
-char* reverse_postfix_sign(char*);
-void set_spectrum(AttInMetadata*, Datum*, bool*, spectrum_t*, int);
-int spectrum_cmp(const void*, const void*);
+#define SPECTRUM_ARRAY_DIM      2
+
+#define ColumnName(td, idx)         ((Name)(&(TupleDescAttr((td), (idx))->attname)))
+#define ColumnIsDropped(td, idx)    ((bool)TupleDescAttr((td), (idx))->attisdropped)
+#define ColumnCount(td)             ((size_t)(td)->natts)
+#define ColumnType(td, idx)         ((Oid)TupleDescAttr((td), (idx))->atttypid)
+#define StringInfoToCString(si)     ((Pointer)((si)->data + (si)->cursor))
+
+#define IsColumnNumericValue(td, idx)                       \
+            (ColumnType((td), (idx)) == INT4OID ||          \
+            ColumnType((td), (idx)) == NUMERICOID ||        \
+            ColumnType((td), (idx)) == INT8OID ||           \
+            ColumnType((td), (idx)) == FLOAT4OID ||         \
+            ColumnType((td), (idx)) == FLOAT8OID)
+
+#define IsColumnNumericArray(td, idx)                       \
+            (ColumnType((td), (idx)) == FLOAT4ARRAYOID ||   \
+            ColumnType((td), (idx)) == FLOAT8ARRAYOID ||    \
+            ColumnType((td), (idx)) == INT4ARRAYOID ||      \
+            ColumnType((td), (idx)) == INT8ARRAYOID ||      \
+            ColumnType((td), (idx)) == NUMERICARRAYOID)
+
+#define TrailSpaces(b, e, dir)    do {                      \
+            while(likely((b) != (e))                        \
+                && isspace((uint8) *(b))) (b) += (dir);     \
+            } while(false)
+
+#define TrailLeftSpaces(b, e)   TrailSpaces((b), (e), 1)
+#define TrailRightSpaces(b, e)  TrailSpaces((e), (b), -1)
+
+#define NormalizeNumericSignSuffix(b, e)  do {              \
+            TrailLeftSpaces((b), (e));                      \
+            TrailRightSpaces((b), (e));                     \
+            if(likely((e) != (b)))                          \
+            {                                               \
+                if(*(e) == '+')                             \
+                    *(e) = '\0';                            \
+                else if(*(e) == '-')                        \
+                {                                           \
+                    while((e) != (b))                       \
+                    {                                       \
+                        char c = *((e) - 1);                \
+                        *(e) = c;                           \
+                        *(--(e)) = '-';                     \
+                    }                                       \
+                }                                           \
+            }                                               \
+        }while(false)
 
 #endif /* PGMS_H_ */

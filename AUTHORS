@@ -4,5 +4,3 @@ The extension is based on the Matchms project (https://github.com/matchms/matchm
 It integrates the shortest augmenting path algorithm from the SciPy project (https://scipy.org) that was implemented by
 Peter M. Larsen.
 
-cvector modul is based on [c-vector](https://github.com/eteran/c-vector.git) implemetation with the contribution 
-of Marek Mosna <info@genesissoftware.eu>

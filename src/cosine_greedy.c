@@ -1,21 +1,32 @@
 #include <postgres.h>
 #include <fmgr.h>
 #include <math.h>
+#include <utils/array.h>
+
 #include "cosine.h"
 
 
 PG_FUNCTION_INFO_V1(cosine_greedy);
 Datum cosine_greedy(PG_FUNCTION_ARGS)
 {
-    void *spec1 = PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
-    void *spec2 = PG_DETOAST_DATUM(PG_GETARG_DATUM(1));
+	int ndims;
+	int *dims;
+	int nitems;
+    ArrayType *spec1 = PG_GETARG_ARRAYTYPE_P(0);
+    ArrayType *spec2 = PG_GETARG_ARRAYTYPE_P(1);
 
-    int len1 = (VARSIZE(spec1) - VARHDRSZ) / sizeof(float4) / 2;
-    float *restrict mz1 = (float4 *) VARDATA(spec1);
+    ndims = ARR_NDIM(spec1);
+    dims = ARR_DIMS(spec1);
+    nitems = ArrayGetNItems(ndims, dims);
+    int len1 = nitems / ndims;
+    float *restrict mz1 = (float4 *) ARR_DATA_PTR(spec1);
     float *restrict intensities1 = mz1 + len1;
 
-    int len2 = (VARSIZE(spec2) - VARHDRSZ) / sizeof(float4) / 2;
-    float *restrict mz2 = (float4 *) VARDATA(spec2);
+    ndims = ARR_NDIM(spec2);
+    dims = ARR_DIMS(spec2);
+    nitems = ArrayGetNItems(ndims, dims);
+    int len2 = nitems / ndims;
+    float *restrict mz2 = (float4 *) ARR_DATA_PTR(spec2);
     float *restrict intensities2 = mz2 + len2;
 
     float tolerance = PG_GETARG_FLOAT4(2);
@@ -73,15 +84,24 @@ Datum cosine_greedy(PG_FUNCTION_ARGS)
 PG_FUNCTION_INFO_V1(cosine_greedy_simple);
 Datum cosine_greedy_simple(PG_FUNCTION_ARGS)
 {
-    void *spec1 = PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
-    void *spec2 = PG_DETOAST_DATUM(PG_GETARG_DATUM(1));
+	int ndims;
+	int *dims;
+	int nitems;
+    ArrayType *spec1 = PG_GETARG_ARRAYTYPE_P(0);
+    ArrayType *spec2 = PG_GETARG_ARRAYTYPE_P(1);
 
-    int len1 = (VARSIZE(spec1) - VARHDRSZ) / sizeof(float4) / 2;
-    float *restrict mz1 = (float4 *) VARDATA(spec1);
+    ndims = ARR_NDIM(spec1);
+    dims = ARR_DIMS(spec1);
+    nitems = ArrayGetNItems(ndims, dims);
+    int len1 = nitems / ndims;
+    float *restrict mz1 = (float4 *) ARR_DATA_PTR(spec1);
     float *restrict intensities1 = mz1 + len1;
 
-    int len2 = (VARSIZE(spec2) - VARHDRSZ) / sizeof(float4) / 2;
-    float *restrict mz2 = (float4 *) VARDATA(spec2);
+    ndims = ARR_NDIM(spec2);
+    dims = ARR_DIMS(spec2);
+    nitems = ArrayGetNItems(ndims, dims);
+    int len2 = nitems / ndims;
+    float *restrict mz2 = (float4 *) ARR_DATA_PTR(spec2);
     float *restrict intensities2 = mz2 + len2;
 
     float tolerance = PG_GETARG_FLOAT4(2);
