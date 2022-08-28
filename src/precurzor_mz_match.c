@@ -31,7 +31,7 @@ Datum precurzor_mz_match(PG_FUNCTION_ARGS)
     const float tolerance = PG_GETARG_FLOAT4(2);
     VarChar* tolerance_type = PG_GETARG_VARCHAR_P(3);
     bool match = false;
-    float dif = abs(reference - query);
+    float dif = fabsf(reference - query);
 
     elog(DEBUG1, "%f in %f by %s", dif, tolerance, VARDATA(tolerance_type));
 
@@ -39,7 +39,7 @@ Datum precurzor_mz_match(PG_FUNCTION_ARGS)
         match = (dif <= tolerance);
     else
     {
-        float mean = abs(reference + query) / 2;
+        float mean = fabsf(reference + query) / 2;
         match = (dif/mean*1e6 <= tolerance);
     }
 

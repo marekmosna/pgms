@@ -27,6 +27,7 @@
     #include <utils/jsonapi.h>
 #endif
 #include <nodes/pg_list.h>
+#include <access/htup_details.h>
 
 typedef struct
 {
@@ -90,7 +91,9 @@ static dummyret parser_set_column_array(json_ctx_t* ctx, AttInMetadata *attinmet
 
     if(columnIndex < ColumnCount(attinmeta->tupdesc) && !ColumnIsDropped(attinmeta->tupdesc, columnIndex))
     {
+        ListCell *cell = NULL;
         size_t count = list_length(l);
+
         elog(DEBUG1, "%s of %d: sizeof %ld in %ld dimension"
             , NameStr(*ColumnName(attinmeta->tupdesc, columnIndex))
             , ColumnType(attinmeta->tupdesc, columnIndex)
@@ -98,7 +101,6 @@ static dummyret parser_set_column_array(json_ctx_t* ctx, AttInMetadata *attinmet
             , dim);
 
         appendStringInfoCharMacro(result, '{');
-        ListCell *cell = NULL;
 
         foreach(cell, l)
         {
@@ -205,7 +207,6 @@ void json_ctx_next(AttInMetadata *attinmeta, json_ctx_t *json_ctx)
                     if(mzs && peaks)
                     {
                         List *spectrums = NIL;
-                        Datum result;
 
                         spectrums = lappend(spectrums, mzs);
                         spectrums = lappend(spectrums, peaks);

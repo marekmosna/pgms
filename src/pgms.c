@@ -33,7 +33,11 @@ Oid spectrumOid;
 void _PG_init()
 {
     Oid spaceid = LookupExplicitNamespace("pgms", false);
+#if PG_VERSION_NUM >= 120000
     spectrumOid = GetSysCacheOid2(TYPENAMENSP, Anum_pg_type_oid, PointerGetDatum("spectrum"), ObjectIdGetDatum(spaceid));
+#else
+    spectrumOid = GetSysCacheOid2(TYPENAMENSP, PointerGetDatum("spectrum"), ObjectIdGetDatum(spaceid));
+#endif
 }
 
 PG_FUNCTION_INFO_V1(load_mgf_lo);
@@ -47,7 +51,6 @@ Datum load_mgf_lo(PG_FUNCTION_ARGS)
     {
         MemoryContext oldcontext = NULL;
         TupleDesc tuple_desc = NULL;
-        AttInMetadata *attinmeta = NULL;
 
         funcctx = SRF_FIRSTCALL_INIT();
         oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
@@ -100,7 +103,6 @@ Datum load_mgf_varchar(PG_FUNCTION_ARGS)
     {
         MemoryContext oldcontext = NULL;
         TupleDesc tuple_desc = NULL;
-        AttInMetadata *attinmeta = NULL;
 
         funcctx = SRF_FIRSTCALL_INIT();
         oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);

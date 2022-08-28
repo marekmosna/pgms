@@ -23,6 +23,7 @@
 #include <storage/large_object.h>
 #include <funcapi.h>
 #include <nodes/pg_list.h>
+#include <access/htup_details.h>
 
 #define BEGIN_IONS_STR          "BEGIN IONS"
 #define END_IONS_STR            "END IONS"

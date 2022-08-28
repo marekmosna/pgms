@@ -15,7 +15,7 @@ static inline float calc_score(const float intensity1, const float intensity2, c
 }
 
 
-static inline float calc_norm(const float const *restrict intensities, const float const *restrict mz, const uint len, const float intensity_power, const float mz_power)
+static inline float calc_norm(const float *restrict intensities, const float *restrict mz, const uint len, const float intensity_power, const float mz_power)
 {
     float result = 0;
 
