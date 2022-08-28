@@ -1,0 +1,50 @@
+{
+    "name": "pgms",
+    "abstract": "Postgres Mass Spectrometry Extension",
+    "description": "",
+    "version": "0.2.0",
+    "maintainer": [
+       "Marek Mosna <marek.mosna@genesissoftware.eu>"
+    ],
+    "license": "GPLv3",
+    "provides": {
+       "semver": {
+          "abstract": "Postgres Mass Spectrometry Extension",
+          "file": "sql/pgms--0.1--0.2.0.sql",
+          "docfile": "README.md",
+          "version": "0.2.0"
+       }
+    },
+    "prereqs": {
+       "runtime": {
+          "requires": {
+             "PostgreSQL": "11.0.0"
+          }
+       },
+       "test": {
+          "requires": {
+             "plpgsql": 0
+          }
+       }
+    },
+    "resources": {
+       "bugtracker": {
+          "web": "https://github.com/marekmosna/pgms/issues/"
+       },
+       "repository": {
+          "url": "git://github.com/marekmosna/pgms.git",
+          "web": "https://github.com/marekmosna/pgms/",
+          "type": "git"
+       }
+    },
+    "generated_by": "Marek Mosna",
+    "meta-spec": {
+       "version": "1.0.0",
+       "url": "https://pgxn.org/meta/spec.txt"
+    },
+    "tags": [
+       "mass spectrometry",
+       "cosine",
+       "mgf"
+    ]
+ }
