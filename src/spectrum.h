@@ -1,6 +1,6 @@
 /* 
  * This file is part of the PGMS distribution (https://github.com/genesissoftware-tech/pgms or https://ip-147-251-124-124.flt.cloud.muni.cz/chemdb/pgms).
- * Copyright (c) 2022 Marek Mosna (info@genesissoftware.eu) for rest of functions
+ * Copyright (c) 2022 Marek Mosna (marek.mosna@genesissoftware.eu) for rest of functions
  *
  * This program is free software: you can redistribute it and/or modify  
  * it under the terms of the GNU General Public License as published by  
