@@ -24,11 +24,18 @@
 #include <funcapi.h>
 #include <nodes/pg_list.h>
 #include <access/htup_details.h>
+#include <libpq/libpq-fs.h>
+
+#include <utils/syscache.h>
 
 #define BEGIN_IONS_STR          "BEGIN IONS"
 #define END_IONS_STR            "END IONS"
 #define COMMENT_STR             "#;!/"
 #define BUFFER_SIZE             (1 << 20) //1MB
+
+PG_MODULE_MAGIC;
+
+static Oid spectrumOid;
 
 typedef enum 
 {
@@ -441,4 +448,114 @@ Datum parser_get_tuple(struct Parser* parser)
     return HeapTupleGetDatum(
         heap_form_tuple(parser->meta->tupdesc, parser->values, parser->isnull)
     );
+}
+
+PG_FUNCTION_INFO_V1(load_mgf_lo);
+Datum load_mgf_lo(PG_FUNCTION_ARGS)
+{
+    bool next;
+    FuncCallContext *funcctx = NULL;
+    struct Parser* parser = NULL;
+
+    if(SRF_IS_FIRSTCALL())
+    {
+        MemoryContext oldcontext = NULL;
+        TupleDesc tuple_desc = NULL;
+
+        funcctx = SRF_FIRSTCALL_INIT();
+        oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
+
+        if(get_call_result_type(fcinfo, NULL, &tuple_desc) != TYPEFUNC_COMPOSITE)
+            ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED)
+                , errmsg("unsupported return type")));
+
+        funcctx->attinmeta = TupleDescGetAttInMetadata(tuple_desc);
+        parser = parser_init_lob(
+            inv_open(PG_GETARG_OID(0), INV_READ, funcctx->multi_call_memory_ctx)
+            , funcctx->attinmeta
+        );
+        parser_globals(parser);
+        funcctx->user_fctx = (void*)parser;
+        MemoryContextSwitchTo(oldcontext);
+    }
+
+    funcctx = SRF_PERCALL_SETUP();
+    parser = (struct Parser*) funcctx->user_fctx;
+
+    PG_TRY();
+    {
+        next = parser_next(parser);
+    }
+    PG_CATCH();
+    {
+        parser_close(parser);
+        PG_RE_THROW();
+    }
+    PG_END_TRY();
+
+    if(next)
+    {
+        SRF_RETURN_NEXT(funcctx, parser_get_tuple(parser));
+    }
+
+    parser_close(parser);
+    SRF_RETURN_DONE(funcctx);
+}
+
+PG_FUNCTION_INFO_V1(load_mgf_varchar);
+Datum load_mgf_varchar(PG_FUNCTION_ARGS)
+{
+    bool next;
+    FuncCallContext *funcctx = NULL;
+    struct Parser* parser = NULL;
+
+    if(SRF_IS_FIRSTCALL())
+    {
+        MemoryContext oldcontext = NULL;
+        TupleDesc tuple_desc = NULL;
+
+        funcctx = SRF_FIRSTCALL_INIT();
+        oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
+
+        if(get_call_result_type(fcinfo, NULL, &tuple_desc) != TYPEFUNC_COMPOSITE)
+            ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED)
+                , errmsg("unsupported return type")));
+
+        funcctx->attinmeta = TupleDescGetAttInMetadata(tuple_desc);
+        parser = parser_init_varchar(PG_GETARG_VARCHAR_P(0), funcctx->attinmeta);
+        parser_globals(parser);
+        funcctx->user_fctx = (void*)parser;
+        MemoryContextSwitchTo(oldcontext);
+    }
+
+    funcctx = SRF_PERCALL_SETUP();
+    parser = (struct Parser*) funcctx->user_fctx;
+
+    PG_TRY();
+    {
+        next = parser_next(parser);
+    }
+    PG_CATCH();
+    {
+        parser_close(parser);
+        PG_RE_THROW();
+    }
+    PG_END_TRY();
+
+    if(next)
+    {
+        SRF_RETURN_NEXT(funcctx, parser_get_tuple(parser));
+    }
+
+    parser_close(parser);
+    SRF_RETURN_DONE(funcctx);
+}
+
+void _PG_init()
+{
+#if PG_VERSION_NUM >= 120000
+    spectrumOid = GetSysCacheOid1(TYPENAMENSP, Anum_pg_type_oid, PointerGetDatum("spectrum"));
+#else
+    spectrumOid = GetSysCacheOid1(TYPENAMENSP, PointerGetDatum("spectrum"));
+#endif
 }

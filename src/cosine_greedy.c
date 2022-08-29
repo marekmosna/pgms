@@ -5,6 +5,7 @@
 
 #include "cosine.h"
 
+PG_MODULE_MAGIC;
 
 PG_FUNCTION_INFO_V1(cosine_greedy);
 Datum cosine_greedy(PG_FUNCTION_ARGS)
