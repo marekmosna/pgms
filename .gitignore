@@ -3,3 +3,8 @@
 regression.diffs
 regression.out
 /src/*.bc
+/results/**
+/sql/pgms
+/sql/pgms--?.?.?.sql
+/pgms-*
+/latest-changes.md

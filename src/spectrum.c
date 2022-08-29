@@ -21,6 +21,7 @@
 #include <catalog/pg_type.h>
 #include <utils/lsyscache.h>
 
+PG_MODULE_MAGIC;
 
 PG_FUNCTION_INFO_V1(spectrum_input);
 Datum spectrum_input(PG_FUNCTION_ARGS)

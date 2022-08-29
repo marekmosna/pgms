@@ -23,6 +23,8 @@
 #define DALTON_TYPE "Dalton"
 #define PPM_TYPE    "ppm"
 
+PG_MODULE_MAGIC;
+
 PG_FUNCTION_INFO_V1(precurzor_mz_match);
 Datum precurzor_mz_match(PG_FUNCTION_ARGS)
 {

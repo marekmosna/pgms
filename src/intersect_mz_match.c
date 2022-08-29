@@ -21,6 +21,7 @@
 #include <utils/array.h>
 #include <math.h>
 
+PG_MODULE_MAGIC;
 
 PG_FUNCTION_INFO_V1(intersect_mz);
 Datum intersect_mz(PG_FUNCTION_ARGS)

@@ -20,6 +20,7 @@
 #include <math.h>
 #include "cosine.h"
 
+PG_MODULE_MAGIC;
 
 PG_FUNCTION_INFO_V1(modified_cosine);
 Datum modified_cosine(PG_FUNCTION_ARGS)

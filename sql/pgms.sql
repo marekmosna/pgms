@@ -1,14 +1,21 @@
--- complain if script is sourced in psql, rather than via CREATE EXTENSION
-\echo Use "CREATE EXTENSION pgms" to load this file. \quit
-
+SET client_min_messages TO warning;
+SET log_min_messages    TO warning;
 
 CREATE TYPE spectrum;
+
 CREATE TYPE spectrumrange AS RANGE (
     SUBTYPE = float4
 );
 
-CREATE FUNCTION spectrum_input(cstring) RETURNS spectrum  AS 'MODULE_PATHNAME' LANGUAGE C IMMUTABLE PARALLEL SAFE STRICT;
-CREATE FUNCTION spectrum_output(spectrum) RETURNS cstring AS 'MODULE_PATHNAME' LANGUAGE C IMMUTABLE PARALLEL SAFE STRICT;
+CREATE OR REPLACE FUNCTION spectrum_input(cstring)
+    RETURNS spectrum
+    AS 'spectrum'
+    LANGUAGE C IMMUTABLE PARALLEL SAFE STRICT;
+
+CREATE OR REPLACE FUNCTION spectrum_output(spectrum)
+    RETURNS cstring
+    AS 'spectrum'
+    LANGUAGE C IMMUTABLE PARALLEL SAFE STRICT;
 
 CREATE TYPE spectrum
 (
@@ -38,7 +45,10 @@ CREATE CAST (float[][] AS spectrum)
 ---    spectrum pgms.spectrum
 ---    ...
 ---);
-CREATE FUNCTION load_from_mgf(Oid) RETURNS SETOF record         AS 'MODULE_PATHNAME', 'load_mgf_lo' LANGUAGE C IMMUTABLE PARALLEL SAFE STRICT;
+CREATE OR REPLACE FUNCTION load_from_mgf(Oid)
+    RETURNS SETOF record
+    AS 'mgf', 'load_mgf_lo'
+    LANGUAGE C IMMUTABLE PARALLEL SAFE STRICT;
 
 --- Read given text literal in Mascote Generic Format and returns the set of records
 --- @param varchar MGF formated text
@@ -52,14 +62,20 @@ CREATE FUNCTION load_from_mgf(Oid) RETURNS SETOF record         AS 'MODULE_PATHN
 --- END IONS') as (
 ---    spectrum pgms.spectrum
 ---);
-CREATE FUNCTION load_from_mgf(varchar) RETURNS SETOF record     AS 'MODULE_PATHNAME', 'load_mgf_varchar' LANGUAGE C IMMUTABLE PARALLEL SAFE STRICT;
+CREATE OR REPLACE FUNCTION load_from_mgf(varchar)
+    RETURNS SETOF record
+    AS 'mgf', 'load_mgf_varchar'
+    LANGUAGE C IMMUTABLE PARALLEL SAFE STRICT;
 
 --- Compute cosine greedy similarity score
 --- @param spectrum reference spectrum
 --- @param spectrum query spectrum
 --- @param float4 tolerance
 --- @return cosine greedy similarity score
-CREATE FUNCTION cosine_greedy(spectrum, spectrum, float4=0.1) RETURNS float4 AS 'MODULE_PATHNAME','cosine_greedy_simple' LANGUAGE C IMMUTABLE PARALLEL SAFE STRICT COST 100;
+CREATE OR REPLACE FUNCTION cosine_greedy(spectrum, spectrum, float4=0.1)
+    RETURNS float4
+    AS 'cosine_greedy','cosine_greedy_simple'
+    LANGUAGE C IMMUTABLE PARALLEL SAFE STRICT COST 100;
 
 --- Compute cosine greedy similarity score
 --- @param spectrum reference spectrum
@@ -68,7 +84,10 @@ CREATE FUNCTION cosine_greedy(spectrum, spectrum, float4=0.1) RETURNS float4 AS 
 --- @param float4 mass power
 --- @param float4 intenzity power
 --- @return cosine greedy similarity score
-CREATE FUNCTION cosine_greedy(spectrum, spectrum, float4, float4, float4) RETURNS float4 AS 'MODULE_PATHNAME' LANGUAGE C IMMUTABLE PARALLEL SAFE STRICT COST 1000;
+CREATE OR REPLACE FUNCTION cosine_greedy(spectrum, spectrum, float4, float4, float4)
+    RETURNS float4
+    AS 'cosine_greedy'
+    LANGUAGE C IMMUTABLE PARALLEL SAFE STRICT COST 1000;
 
 --- Compute cosine hungarian similarity score
 --- @param spectrum reference spectrum
@@ -77,7 +96,10 @@ CREATE FUNCTION cosine_greedy(spectrum, spectrum, float4, float4, float4) RETURN
 --- @param float4 mass power
 --- @param float4 intenzity power
 --- @return cosine hungarian similarity score
-CREATE FUNCTION cosine_hungarian(spectrum, spectrum, float4=0.1, float4=0.0, float4=1.0) RETURNS float4 AS 'MODULE_PATHNAME' LANGUAGE C IMMUTABLE PARALLEL SAFE STRICT COST 1000;
+CREATE FUNCTION cosine_hungarian(spectrum, spectrum, float4=0.1, float4=0.0, float4=1.0)
+    RETURNS float4
+    AS 'cosine_hungarian'
+    LANGUAGE C IMMUTABLE PARALLEL SAFE STRICT COST 1000;
 
 --- Normalize mass spectrum (provides peaks in interval <0, 1>)
 --- @param spectrum ion spectrum
@@ -110,3 +132,92 @@ BEGIN
 END;
 $BODY$
   LANGUAGE plpgsql IMMUTABLE;
+
+--- Read given text literal in JSON format and returns the set of records
+--- @param jsonb JSON formated text
+--- @return Set of untyped records with selected columns
+--- select * from pgms.load_from_json('
+--- {
+---  "peaks_json": [
+---      [
+---           289.286377,
+---          8068.0
+---      ],
+---      [
+---          295.545288,
+---          22507.0
+---      ],
+---      [
+---          298.489624,
+---          3925.0
+---      ],
+---      [
+---          317.3249511231221321465465,
+---          18742.0
+---      ]
+---  ]
+--- }'::jsonb) as (
+---    spectrum pgms.spectrum
+---);
+CREATE OR REPLACE FUNCTION load_from_json(jsonb)
+    RETURNS SETOF record
+    AS 'json'
+    LANGUAGE C IMMUTABLE PARALLEL SAFE STRICT;
+
+--- In case of float4 mass precursor function just returns its value. In case of array of values the function returns the 1st value of array
+--- @param float4 mass precursor
+--- @return valid mass precursor
+CREATE OR REPLACE FUNCTION precursor_mz_correction(f float4) 
+  RETURNS float4 AS
+$BODY$
+BEGIN
+    return f;
+END;
+$BODY$
+  LANGUAGE plpgsql IMMUTABLE;
+
+--- In case of float4 mass precursor function just returns its value. In case of array of values the function returns the 1st value of array
+--- @param float4[] mass precursor
+--- @return valid mass precursor
+CREATE OR REPLACE FUNCTION precursor_mz_correction(a float4[]) 
+  RETURNS float4 AS
+$BODY$
+BEGIN
+    return a[1];
+END;
+$BODY$
+  LANGUAGE plpgsql IMMUTABLE;
+
+--- Compute modified cosine similarity score
+--- @param spectrum reference spectrum
+--- @param spectrum query spectrum
+--- @param float4 pepmass shift (reference_pepmass - query_pepmass)
+--- @param float4 tolerance (default value 1.0)
+--- @param float4 mass power (default value 0.0)
+--- @param float4 intenzity power (default value 1.0)
+--- @return modified cosine similarity score
+CREATE OR REPLACE FUNCTION cosine_modified(spectrum, spectrum, float4, float4=0.1, float4=0.0, float4=1.0)
+    RETURNS float4
+    AS 'modified_cosine', 'modified_cosine'
+    LANGUAGE C IMMUTABLE PARALLEL SAFE STRICT COST 1000;
+
+--- Compute intersection of masses as similarity score
+--- @param spectrum reference spectrum
+--- @param spectrum query spectrum
+--- @param float4 tolerance
+--- @return intersection similarity score
+CREATE OR REPLACE FUNCTION intersect_mz(spectrum, spectrum, float4=0.1)
+    RETURNS float4
+    AS 'intersect_mz_match' LANGUAGE C IMMUTABLE PARALLEL SAFE STRICT COST 1000;
+
+--- Compute  similarity score based on precursor
+--- @param float4 reference precursor
+--- @param float4 query precursor
+--- @param float4 tolerance
+--- @param varchar type of tolerance [Dalton, ppm](default 'Dalton')
+--- @return precursor similarity score
+CREATE OR REPLACE FUNCTION precurzor_mz_match(float4, float4, float4=1.0, varchar='Dalton')
+    RETURNS float4
+    AS 'precurzor_mz_match'
+    LANGUAGE C IMMUTABLE PARALLEL SAFE STRICT COST 1000;
+

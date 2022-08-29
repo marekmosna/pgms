@@ -21,8 +21,6 @@
 #include <postgres.h>
 #include <funcapi.h>
 
-extern Oid spectrumOid;
-
 #define SPECTRUM_ARRAY_DIM      2
 
 #define ColumnName(td, idx)         ((Name)(&(TupleDescAttr((td), (idx))->attname)))
