@@ -1,5 +1,8 @@
 # Postgres Mass Spectrometry Extension
 
+![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/marekmosna/pgms)
+[![Build Status](https://github.com/marekmosna/pgms/workflows/CI/badge.svg)](https://github.com/marekmosna/pgms/actions)
+
 The extension was developed and tested on Linux Ubuntu 20.04.3 against Postgresql 12.9
 
 ## Requirements
