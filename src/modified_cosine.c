@@ -18,6 +18,7 @@
 #include <postgres.h>
 #include <fmgr.h>
 #include <math.h>
+#include <utils/array.h>
 #include "cosine.h"
 
 PG_MODULE_MAGIC;
@@ -25,25 +26,39 @@ PG_MODULE_MAGIC;
 PG_FUNCTION_INFO_V1(modified_cosine);
 Datum modified_cosine(PG_FUNCTION_ARGS)
 {
-    bytea* reference = PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
-    bytea* query = PG_DETOAST_DATUM(PG_GETARG_DATUM(1));
-
-    size_t reference_len = (VARSIZE(reference) - VARHDRSZ) / sizeof(float4) / 2;
-    float4 *restrict reference_mzs = (float4 *) VARDATA(reference);
-    float4 *restrict reference_peaks = reference_mzs + reference_len;
-
-    size_t query_len = (VARSIZE(query) - VARHDRSZ) / sizeof(float4) / 2;
-    float4 *restrict query_mzs = (float4 *) VARDATA(query);
-    float4 *restrict query_peaks = query_mzs + query_len;
-
-    float4 shift = PG_GETARG_FLOAT4(2);
-    float4 tolerance = PG_GETARG_FLOAT4(3);
-    float4 mz_power = PG_GETARG_FLOAT4(4);
-    float4 intensity_power = PG_GETARG_FLOAT4(5);
-
+    int ndims = 0;
+    int *dims = NULL;
+    int nitems = 0;
+    int reference_len = 0;
+    int query_len = 0;
+    float4 *restrict reference_mzs = NULL;
+    float4 *restrict reference_peaks = NULL;
+    float4 *restrict query_mzs = NULL;
+    float4 *restrict query_peaks = NULL;
     size_t matches = 0;
     Index lowest_idx = 0;
-    float4 score = 0;
+    float4 score = 0.0f;
+
+    ArrayType *reference = PG_GETARG_ARRAYTYPE_P(0);
+    ArrayType *query = PG_GETARG_ARRAYTYPE_P(1);
+    const float4 shift = PG_GETARG_FLOAT4(2);
+    const float4 tolerance = PG_GETARG_FLOAT4(3);
+    const float4 mz_power = PG_GETARG_FLOAT4(4);
+    const float4 intensity_power = PG_GETARG_FLOAT4(5);
+
+    ndims = ARR_NDIM(reference);
+    dims = ARR_DIMS(reference);
+    nitems = ArrayGetNItems(ndims, dims);
+    reference_len = nitems / ndims;
+    reference_mzs = (float4 *) ARR_DATA_PTR(reference);
+    reference_peaks = reference_mzs + reference_len;
+
+    ndims = ARR_NDIM(query);
+    dims = ARR_DIMS(query);
+    nitems = ArrayGetNItems(ndims, dims);
+    query_len = nitems / ndims;
+    query_mzs = (float4 *) ARR_DATA_PTR(query);
+    query_peaks = query_mzs + query_len;
 
     for(Index reference_index = 0; reference_index < reference_len; reference_index++)
     {
@@ -77,10 +92,10 @@ Datum modified_cosine(PG_FUNCTION_ARGS)
     PG_FREE_IF_COPY(reference, 0);
     PG_FREE_IF_COPY(query, 1);
 
-    if(isfinite(score) && score < 0)
-        score = 0;
-    else if(isfinite(score) && score > 1)
-        score = 1;
+    if(isfinite(score) && score < 0.0f)
+        score = 0.0f;
+    else if(isfinite(score) && score > 1.0f)
+        score = 1.0f;
     else if(!isfinite(score))
         score = NAN;
 
