@@ -22,6 +22,7 @@
 #include <catalog/pg_type.h>
 #include <storage/large_object.h>
 #include <funcapi.h>
+#include <plpgsql.h>
 #include <nodes/pg_list.h>
 #include <access/htup_details.h>
 #include <libpq/libpq-fs.h>
