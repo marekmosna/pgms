@@ -57,6 +57,7 @@ static inline int augmenting_path(int nr, int nc, const float *restrict cost, fl
 {
     float min = 0;
     int num_remaining = nc;
+    int sink = -1;
 
     // Filling this up in reverse order ensures that the solution of a
     // constant cost matrix is the identity matrix (c.f. #11602).
@@ -74,10 +75,10 @@ static inline int augmenting_path(int nr, int nc, const float *restrict cost, fl
 
 
     // find shortest augmenting path
-    int sink = -1;
     while(sink == -1)
     {
         int index = -1;
+        int j = 0;
         float lowest = INFINITY;
         sr[i] = true;
 
@@ -105,7 +106,7 @@ static inline int augmenting_path(int nr, int nc, const float *restrict cost, fl
         }
 
         min = lowest;
-        int j = remaining[index];
+        j = remaining[index];
 
         if(min == INFINITY)
             return -1; // infeasible cost matrix
@@ -125,8 +126,19 @@ static inline int augmenting_path(int nr, int nc, const float *restrict cost, fl
 
 
 void solve_rectangular_linear_sum_assignment(int nr, int nc, const float *restrict cost, float offset,
-        int *restrict matched, float *restrict score)
+        size_t *restrict matched, float *restrict score)
 {
+    float *restrict u = NULL;
+    float *restrict v = NULL;
+    float *restrict shortest_paths = NULL;
+    int *restrict path = NULL;
+    int *restrict col4row = NULL;
+    int *restrict row4col = NULL;
+    bool *restrict sr = NULL;
+    bool *restrict sc = NULL;
+    int *restrict remaining = NULL;
+    bool infeasible = false;
+
     if(offset == INFINITY)
     {
         *score = NAN;
@@ -139,16 +151,16 @@ void solve_rectangular_linear_sum_assignment(int nr, int nc, const float *restri
         return;
 
     // initialize variables
-    float *restrict u = palloc(nr * sizeof(float));
-    float *restrict v = palloc(nc * sizeof(float));
-    float *restrict shortest_paths = palloc(nc * sizeof(float));
-    int *restrict path = palloc(nc * sizeof(int));
-    int *restrict col4row = palloc(nr * sizeof(int));
-    int *restrict row4col = palloc(nc * sizeof(int));
-    bool *restrict sr = palloc(nr * sizeof(bool));
-    bool *restrict sc = palloc(nc * sizeof(bool));
-    int *restrict remaining = palloc(nc * sizeof(int));
-    bool infeasible = false;
+    u = palloc(nr * sizeof(float));
+    v = palloc(nc * sizeof(float));
+    shortest_paths = palloc(nc * sizeof(float));
+    path = palloc(nc * sizeof(int));
+    col4row = palloc(nr * sizeof(int));
+    row4col = palloc(nc * sizeof(int));
+    sr = palloc(nr * sizeof(bool));
+    sc = palloc(nc * sizeof(bool));
+    remaining = palloc(nc * sizeof(int));
+    infeasible = false;
 
     memset(u, 0, nr * sizeof(float));
     memset(v, 0, nc * sizeof(float));
@@ -229,53 +241,63 @@ void solve_rectangular_linear_sum_assignment(int nr, int nc, const float *restri
 PG_FUNCTION_INFO_V1(cosine_hungarian);
 Datum cosine_hungarian(PG_FUNCTION_ARGS)
 {
-	int ndims;
-	int *dims;
-	int nitems;
-    ArrayType *spec1 = PG_GETARG_ARRAYTYPE_P(0);
-    ArrayType *spec2 = PG_GETARG_ARRAYTYPE_P(1);
-
-    ndims = ARR_NDIM(spec1);
-    dims = ARR_DIMS(spec1);
-    nitems = ArrayGetNItems(ndims, dims);
-    int len1 = nitems / ndims;
-    float *restrict mz1 = (float4 *) ARR_DATA_PTR(spec1);
-    float *restrict intensities1 = mz1 + len1;
-
-    ndims = ARR_NDIM(spec2);
-    dims = ARR_DIMS(spec2);
-    nitems = ArrayGetNItems(ndims, dims);
-    int len2 = nitems / ndims;
-    float *restrict mz2 = (float4 *) ARR_DATA_PTR(spec2);
-    float *restrict intensities2 = mz2 + len2;
-
-    const float tolerance = PG_GETARG_FLOAT4(2);
-    const float mz_power = PG_GETARG_FLOAT4(3);
-    const float intensity_power = PG_GETARG_FLOAT4(4);
-
-
-    int *restrict used1 = palloc(len1 * sizeof(int));
-    int *restrict used2 = palloc(len2 * sizeof(int));
-    int *restrict paired1 = palloc(len1 * len2 * sizeof(int));
-    int *restrict paired2 = palloc(len1 * len2 * sizeof(int));
-
-    memset(used1, 0, len1 * sizeof(int));
-    memset(used2, 0, len2 * sizeof(int));
-
+    int ndims = 0;
+    int *dims = NULL;
+    int nitems = 0;
+    int reference_len = 0;
+    int query_len = 0;
+    float4 *restrict reference_mzs = NULL;
+    float4 *restrict reference_peaks = NULL;
+    float4 *restrict query_mzs = NULL;
+    float4 *restrict query_peaks = NULL;
+    size_t matches = 0;
+    Index lowest_idx = 0;
+    float4 score = 0.0f;
     int pairs = 0;
-    int lowest_idx = 0;
+    int *restrict used1 = NULL;
+    int *restrict used2 = NULL;
+    int *restrict paired1 = NULL;
+    int *restrict paired2 = NULL;
 
-    for(int peak1 = 0; peak1 < len1; peak1++)
+    ArrayType *reference = PG_GETARG_ARRAYTYPE_P(0);
+    ArrayType *query = PG_GETARG_ARRAYTYPE_P(1);
+    const float4 tolerance = PG_GETARG_FLOAT4(2);
+    const float4 mz_power = PG_GETARG_FLOAT4(3);
+    const float4 intensity_power = PG_GETARG_FLOAT4(4);
+
+    ndims = ARR_NDIM(reference);
+    dims = ARR_DIMS(reference);
+    nitems = ArrayGetNItems(ndims, dims);
+    reference_len = nitems / ndims;
+    reference_mzs = (float4 *) ARR_DATA_PTR(reference);
+    reference_peaks = reference_mzs + reference_len;
+
+    ndims = ARR_NDIM(query);
+    dims = ARR_DIMS(query);
+    nitems = ArrayGetNItems(ndims, dims);
+    query_len = nitems / ndims;
+    query_mzs = (float4 *) ARR_DATA_PTR(query);
+    query_peaks = query_mzs + query_len;
+
+    used1 = palloc(reference_len * sizeof(int));
+    used2 = palloc(query_len * sizeof(int));
+    paired1 = palloc(reference_len * query_len * sizeof(int));
+    paired2 = palloc(reference_len * query_len * sizeof(int));
+
+    memset(used1, 0, reference_len * sizeof(int));
+    memset(used2, 0, query_len * sizeof(int));
+
+    for(int peak1 = 0; peak1 < reference_len; peak1++)
     {
-        float low_bound = mz1[peak1] - tolerance;
-        float high_bound = mz1[peak1] + tolerance;
+        float4 low_bound = reference_mzs[peak1] - tolerance;
+        float4 high_bound = reference_mzs[peak1] + tolerance;
 
-        for(int peak2 = lowest_idx; peak2 < len2; peak2++)
+        for(int peak2 = lowest_idx; peak2 < query_len; peak2++)
         {
-            if(mz2[peak2] > high_bound)
+            if(query_mzs[peak2] > high_bound)
                 break;
 
-            if(mz2[peak2] < low_bound)
+            if(query_mzs[peak2] < low_bound)
             {
                 lowest_idx = peak2 + 1;
                 continue;
@@ -290,20 +312,17 @@ Datum cosine_hungarian(PG_FUNCTION_ARGS)
         }
     }
 
-
-    float score = 0;
-    int matches = 0;
-
     if(pairs > 0)
     {
-        int *restrict map1 = palloc(len1 * sizeof(int));
-        int *restrict map2 = palloc(len2 * sizeof(int));
-
-        memset(map1, -1, len1 * sizeof(int));
-        memset(map2, -1, len2 * sizeof(int));
-
+        float *restrict cost = NULL;
         int selected1 = 0;
         int selected2 = 0;
+        float max = 0;
+        int *restrict map1 = palloc(reference_len * sizeof(int));
+        int *restrict map2 = palloc(query_len * sizeof(int));
+
+        memset(map1, -1, reference_len * sizeof(int));
+        memset(map2, -1, query_len * sizeof(int));
 
         for(int i = 0; i < pairs; i++)
         {
@@ -323,19 +342,18 @@ Datum cosine_hungarian(PG_FUNCTION_ARGS)
             swap(paired1, paired2);
             swap(map1, map2);
 
-            swap(intensities1, intensities2);
-            swap(mz1, mz2);
-            swap(len1, len2);
+            swap(reference_peaks, query_peaks);
+            swap(reference_mzs, query_mzs);
+            swap(reference_len, query_len);
         }
 
-        float *restrict cost = palloc(selected1 * selected2 * sizeof(float));
+        cost = palloc(selected1 * selected2 * sizeof(float));
         memset(cost, 0, selected1 * selected2 * sizeof(float));
 
-        float max = 0;
 
         for(int i = 0; i < pairs; i++)
         {
-            float s = calc_score(intensities1[paired1[i]], intensities2[paired2[i]], mz1[paired1[i]], mz2[paired2[i]],
+            float s = calc_score(reference_peaks[paired1[i]], query_peaks[paired2[i]], reference_mzs[paired1[i]], query_mzs[paired2[i]],
                     intensity_power, mz_power);
 
             if(map1[paired1[i]] != -1 && map2[paired2[i]] != -1)
@@ -359,8 +377,8 @@ Datum cosine_hungarian(PG_FUNCTION_ARGS)
 
         if(score != 0)
         {
-            float norm1 = calc_norm(intensities1, mz1, len1, intensity_power, mz_power);
-            float norm2 = calc_norm(intensities2, mz2, len2, intensity_power, mz_power);
+            float4 norm1 = calc_norm(reference_peaks, reference_mzs, reference_len, intensity_power, mz_power);
+            float4 norm2 = calc_norm(query_peaks, query_mzs, query_len, intensity_power, mz_power);
 
             score /= sqrtf(norm1 * norm2);
         }
@@ -375,8 +393,8 @@ Datum cosine_hungarian(PG_FUNCTION_ARGS)
     pfree(used2);
     pfree(used1);
 
-    PG_FREE_IF_COPY(spec1, 0);
-    PG_FREE_IF_COPY(spec2, 1);
+    PG_FREE_IF_COPY(reference, 0);
+    PG_FREE_IF_COPY(query, 1);
 
     if(isfinite(score) && score < 0)
         score = 0;

@@ -26,30 +26,33 @@ PG_MODULE_MAGIC;
 PG_FUNCTION_INFO_V1(intersect_mz);
 Datum intersect_mz(PG_FUNCTION_ARGS)
 {
-	int ndims;
-	int *dims;
-	int nitems;
+    int ndims;
+    int *dims;
+    int nitems;
+    int len1;
+    int len2;
+    float *restrict mz1;
+    float *restrict mz2;
+    size_t count_intersect = 0;
+    size_t count_union = 0;
+    Index peak1 = 0;
+    Index peak2 = 0;
+    const float tolerance = PG_GETARG_FLOAT4(2);
     ArrayType *spec1 = PG_GETARG_ARRAYTYPE_P(0);
     ArrayType *spec2 = PG_GETARG_ARRAYTYPE_P(1);
 
     ndims = ARR_NDIM(spec1);
     dims = ARR_DIMS(spec1);
     nitems = ArrayGetNItems(ndims, dims);
-    int len1 = nitems / ndims;
-    float *restrict mz1 = (float4 *) ARR_DATA_PTR(spec1);
+    len1 = nitems / ndims;
+    mz1 = (float4 *) ARR_DATA_PTR(spec1);
 
     ndims = ARR_NDIM(spec2);
     dims = ARR_DIMS(spec2);
     nitems = ArrayGetNItems(ndims, dims);
-    int len2 = nitems / ndims;
-    float *restrict mz2 = (float4 *) ARR_DATA_PTR(spec2);
+    len2 = nitems / ndims;
+    mz2 = (float4 *) ARR_DATA_PTR(spec2);
 
-    const float tolerance = PG_GETARG_FLOAT4(2);
-
-    size_t count_intersect = 0;
-    size_t count_union = 0;
-
-    Index peak1 = 0, peak2 = 0;
     while (peak1 < len1 && peak2 < len2)
     {
         float low_bound = mz1[peak1] - tolerance;
