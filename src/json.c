@@ -19,6 +19,7 @@
 #include "spectrum.h"
 
 #include <funcapi.h>
+#include <plpgsql.h>
 #include <utils/builtins.h>
 #include <catalog/pg_type.h>
 #if PG_VERSION_NUM >= 130000
@@ -42,6 +43,8 @@ typedef struct
     JsonbIteratorToken state;
     size_t          cnt;
 } json_ctx_t;
+
+void json_ctx_next(AttInMetadata *attinmeta, json_ctx_t *json_ctx);
 
 static void json_ctx_free(json_ctx_t* ctx)
 {

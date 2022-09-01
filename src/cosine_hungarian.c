@@ -51,6 +51,9 @@ Author: PM Larsen & Jakub Galgonek
 
 PG_MODULE_MAGIC;
 
+static void solve_rectangular_linear_sum_assignment(int nr, int nc, const float *restrict cost, float offset,
+        size_t *restrict matched, float *restrict score);
+
 static inline int augmenting_path(int nr, int nc, const float *restrict cost, float offset, const float *restrict u,
         const float *restrict v, int *restrict path, int *restrict row4col, float *restrict shortest_paths, int i,
         bool *restrict sr, bool *restrict sc, int *restrict remaining, float *restrict pmin)

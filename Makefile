@@ -14,8 +14,6 @@ MODULES      = $(patsubst %.c,%,$(wildcard src/*.c))
 PG_CONFIG   ?= pg_config
 EXTRA_CLEAN  = sql/$(EXTENSION)--$(EXTVERSION).sql
 
-PG_CFLAGS = -Wno-missing-prototypes
-
 PGXS := $(shell $(PG_CONFIG) --pgxs)
 include $(PGXS)
 
