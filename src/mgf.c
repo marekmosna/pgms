@@ -20,6 +20,7 @@
 
 #include <utils/builtins.h>
 #include <catalog/pg_type.h>
+#include <catalog/namespace.h>
 #include <storage/large_object.h>
 #include <funcapi.h>
 #include <plpgsql.h>
@@ -36,7 +37,7 @@
 
 PG_MODULE_MAGIC;
 
-static Oid spectrumOid;
+static Oid spectrumOid = InvalidOid;
 
 typedef enum 
 {
@@ -88,7 +89,10 @@ static Index find_column_by_oid(TupleDesc tuple, Oid oid)
     Index idx = 0;
 
     while(idx < ColumnCount(tuple) && ColumnType(tuple, idx) != oid)
+    {
+        elog(DEBUG1, "cmpr %d not match %d", ColumnType(tuple, idx), oid);
         idx++;
+    }
 
     return idx;
 }
@@ -297,6 +301,9 @@ static dummyret parser_set_column_array(struct Parser* parser, Index columnIndex
         pfree(result->data);
         pfree(result);
     }
+    else
+        elog(DEBUG1, "Column: %d not exist", columnIndex);
+
 #undef ArrayInnerTraversal
 }
 
@@ -400,6 +407,10 @@ bool parser_next(struct Parser* parser)
             {
                 spectrums = lappend(spectrums, mzs);
                 spectrums = lappend(spectrums, peaks);
+
+                if(!OidIsValid(spectrumOid))
+                    spectrumOid = TypenameGetTypid("spectrum");
+                
                 idx = find_column_by_oid(parser->meta->tupdesc, spectrumOid);
                 parser_set_column_array(parser, idx, spectrums, SPECTRUM_ARRAY_DIM);
                 list_free_deep(spectrums);
@@ -495,9 +506,8 @@ Datum load_mgf_lo(PG_FUNCTION_ARGS)
     PG_END_TRY();
 
     if(next)
-    {
+
         SRF_RETURN_NEXT(funcctx, parser_get_tuple(parser));
-    }
 
     parser_close(parser);
     SRF_RETURN_DONE(funcctx);
@@ -544,9 +554,7 @@ Datum load_mgf_varchar(PG_FUNCTION_ARGS)
     PG_END_TRY();
 
     if(next)
-    {
         SRF_RETURN_NEXT(funcctx, parser_get_tuple(parser));
-    }
 
     parser_close(parser);
     SRF_RETURN_DONE(funcctx);
@@ -554,9 +562,13 @@ Datum load_mgf_varchar(PG_FUNCTION_ARGS)
 
 void _PG_init()
 {
+    Oid spaceid = LookupExplicitNamespace("pgms", true);
+    if(OidIsValid(spaceid))
+    {
 #if PG_VERSION_NUM >= 120000
-    spectrumOid = GetSysCacheOid1(TYPENAMENSP, Anum_pg_type_oid, PointerGetDatum("spectrum"));
+        spectrumOid = GetSysCacheOid2(TYPENAMENSP, Anum_pg_type_oid, PointerGetDatum("spectrum"), ObjectIdGetDatum(spaceid));
 #else
-    spectrumOid = GetSysCacheOid1(TYPENAMENSP, PointerGetDatum("spectrum"));
+        spectrumOid = GetSysCacheOid2(TYPENAMENSP, PointerGetDatum("spectrum"), ObjectIdGetDatum(spaceid));
 #endif
+    }
 }
