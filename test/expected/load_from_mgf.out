@@ -1,0 +1,14 @@
+\set ECHO none
+1..12
+ok 1 - mgf parser should deal with none mgf format
+ok 2 - mgf parser should deal with none mgf format
+ok 3 - mgf parser should deal with none mgf format
+ok 4 - mgf parser should deal with none mgf format
+ok 5 - mgf parser should deal with indent
+ok 6 - mgf parser should deal with indent
+ok 7 - mgf parser should deal with sign fixures
+ok 8 - mgf parser should deal with suffix sign signarure notation
+ok 9 - mgf parser should deal with arrays
+ok 10 - mgf parser should deal with comments
+ok 11 - mgf parser should deal with global parameters
+ok 12 - mgf parser should deal with global parameters
