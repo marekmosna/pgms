@@ -111,7 +111,7 @@ BEGIN
     return array[array(
             select mz FROM unnest((s::float[])[1:1]) AS t(mz) order by t.mz
         )] || array[array(
-            select t.peak/max(t.peak) over () as peak 
+            select t.peak/COALESCE(NULLIF( MAX(t.peak) over (),0), 1) as peak 
                 FROM unnest((s::float[])[1:1], (s::float[])[2:2]) AS t(mz, peak)
                 order by t.mz
         )];
