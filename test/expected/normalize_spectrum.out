@@ -1,0 +1,5 @@
+\set ECHO none
+1..3
+ok 1 - normalize of the spectrum should match
+ok 2 - normalize of the unordered spectrum should match
+ok 3 - normalize of the spectrum should remains in case of MAX is zero
