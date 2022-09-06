@@ -1,0 +1,3 @@
+\set ECHO none
+1..1
+ok 1 - intersect_mz should be 0.33
