@@ -29,47 +29,54 @@ Datum intersect_mz(PG_FUNCTION_ARGS)
     int ndims;
     int *dims;
     int nitems;
-    int len1;
-    int len2;
-    float *restrict mz1;
-    float *restrict mz2;
+    size_t reference_len;
+    size_t query_len;
+    float4 *restrict reference_mzs;
+    float4 *restrict query_mzs;
     size_t count_intersect = 0;
     size_t count_union = 0;
     Index peak1 = 0;
     Index peak2 = 0;
     const float tolerance = PG_GETARG_FLOAT4(2);
-    ArrayType *spec1 = PG_GETARG_ARRAYTYPE_P(0);
-    ArrayType *spec2 = PG_GETARG_ARRAYTYPE_P(1);
+    ArrayType *reference = PG_GETARG_ARRAYTYPE_P(0);
+    ArrayType *query = PG_GETARG_ARRAYTYPE_P(1);
 
-    ndims = ARR_NDIM(spec1);
-    dims = ARR_DIMS(spec1);
+    ndims = ARR_NDIM(reference);
+    dims = ARR_DIMS(reference);
     nitems = ArrayGetNItems(ndims, dims);
-    len1 = nitems / ndims;
-    mz1 = (float4 *) ARR_DATA_PTR(spec1);
+    reference_len = nitems / ndims;
+    reference_mzs = (float4 *) ARR_DATA_PTR(reference);
 
-    ndims = ARR_NDIM(spec2);
-    dims = ARR_DIMS(spec2);
+    ndims = ARR_NDIM(query);
+    dims = ARR_DIMS(query);
     nitems = ArrayGetNItems(ndims, dims);
-    len2 = nitems / ndims;
-    mz2 = (float4 *) ARR_DATA_PTR(spec2);
+    query_len = nitems / ndims;
+    query_mzs = (float4 *) ARR_DATA_PTR(query);
 
-    while (peak1 < len1 && peak2 < len2)
+    elog(DEBUG1, "reference of %ld against query of %ld",
+        reference_len, query_len);
+
+    while (peak1 < reference_len && peak2 < query_len)
     {
-        float low_bound = mz1[peak1] - tolerance;
-        float high_bound = mz1[peak1] + tolerance;
+        float4 low_bound = reference_mzs[peak1] - tolerance;
+        float4 high_bound = reference_mzs[peak1] + tolerance;
 
-        if (low_bound < mz2[peak2])
+        if (query_mzs[peak2] < low_bound)
         {
             peak1++;
             count_union++;
+            elog(DEBUG1, "too low: ref %f against query %f",low_bound, query_mzs[peak2]);
         }
-        else if (high_bound > mz2[peak2])
+        else if (query_mzs[peak2] > high_bound)
         {
             peak2++;
             count_union++;
+            elog(DEBUG1, "too high: shift refquery to %d",peak2);
         }
         else
         {
+            elog(DEBUG1, "intersection on ref %d against query on %d",
+                peak1, peak2);
             peak1++;
             peak2++;
             count_union++;
@@ -77,14 +84,20 @@ Datum intersect_mz(PG_FUNCTION_ARGS)
         }
     }
 
-    while (peak1 < len1)
+    while (peak1 < reference_len)
+    {
         count_union++;
+        peak1++;
+    }
 
-    while (peak2 < len2)
+    while (peak2 < query_len)
+    {
         count_union++;
+        peak2++;
+    }
 
-    PG_FREE_IF_COPY(spec1, 0);
-    PG_FREE_IF_COPY(spec2, 1);
+    PG_FREE_IF_COPY(reference, 0);
+    PG_FREE_IF_COPY(query, 1);
 
-    PG_RETURN_FLOAT4(count_intersect == 0 ? 0.0f : (float)count_intersect/(float)count_union);
+    PG_RETURN_FLOAT4(count_intersect == 0 ? 0.0f : (float4)count_intersect/(float4)count_union);
 }
