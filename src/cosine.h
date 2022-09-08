@@ -1,30 +1,44 @@
 #ifndef COSINE_H
 #define COSINE_H
 
-#include <math.h>
+#include <utils/float.h>
 
-
-static inline float calc_score(const float intensity1, const float intensity2, const float mz1,  const float mz2, const float intensity_power, const float mz_power)
+static inline float4 calc_score(const float4 intensity1,
+    const float4 intensity2, 
+    const float4 mz1,
+    const float4 mz2,
+    const float4 intensity_power,
+    const float4 mz_power)
 {
-    if(mz_power == 0 && intensity_power == 1)
-        return intensity1 * intensity2;
-    else if(mz_power == 0)
-        return powf(intensity1 * intensity2, intensity_power);
+    if(float4_eq(mz_power, 0.0))
+    {
+        if(float4_eq(intensity_power, 1.0))
+            return float4_mul(intensity1, intensity2);
+        else
+            return powf(float4_mul(intensity1, intensity2), intensity_power);
+    }
     else
-        return powf(mz1 * mz2, mz_power) * powf(intensity1 * intensity2, intensity_power);
+        return powf(float4_mul(mz1, mz2), mz_power) * powf(float4_mul(intensity1, intensity2), intensity_power);
 }
 
 
-static inline float calc_norm(const float *restrict intensities, const float *restrict mz, const uint len, const float intensity_power, const float mz_power)
+static inline float4 calc_norm(const float4 *restrict intensities,
+    const float4 *restrict mz,
+    const size_t len,
+    const float4 intensity_power,
+    const float4 mz_power)
 {
-    float result = 0;
+    float4 result = 0;
 
-    for(uint i = 0; i < len; i++)
+    for(size_t i = 0; i < len; i++)
     {
-        if(mz_power == 0 && intensity_power == 1)
-            result += intensities[i] * intensities[i];
-        else if(mz_power == 0)
-            result += powf(intensities[i], 2 * intensity_power);
+        if(float4_eq(mz_power, 0.0))
+        {
+            if(float4_eq(intensity_power, 1.0))
+                result += float4_mul(intensities[i], intensities[i]);
+            else
+                result += powf(intensities[i], 2 * intensity_power);
+        }
         else
             result += powf(mz[i], 2 * mz_power) * powf(intensities[i], 2 * intensity_power);
     }
