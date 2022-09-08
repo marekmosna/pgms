@@ -1,0 +1,6 @@
+\set ECHO none
+1..4
+ok 1 - cosine_greedy should be 0.161538
+ok 2 - cosine_greedy should be 0.234404
+ok 3 - cosine_greedy should be 0.984495
+ok 4 - cosine_greedy should be 0.042855

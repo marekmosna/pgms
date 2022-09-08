@@ -1,7 +1,8 @@
+#include <float.h>
 #include <postgres.h>
 #include <fmgr.h>
-#include <math.h>
 #include <utils/array.h>
+#include <utils/float.h>
 
 #include "cosine.h"
 
@@ -19,7 +20,8 @@ Datum cosine_greedy(PG_FUNCTION_ARGS)
     float4 *restrict reference_peaks = NULL;
     float4 *restrict query_mzs = NULL;
     float4 *restrict query_peaks = NULL;
-    size_t matches = 0;
+    Index *restrict query_used = NULL;
+    Index *restrict query_stack = NULL;
     Index lowest_idx = 0;
     float4 score = 0.0f;
 
@@ -43,24 +45,79 @@ Datum cosine_greedy(PG_FUNCTION_ARGS)
     query_mzs = (float4 *) ARR_DATA_PTR(query);
     query_peaks = query_mzs + query_len;
 
-    for(int peak1 = 0; peak1 < reference_len; peak1++)
+    query_used = palloc0(query_len * sizeof(Index));
+    query_stack = palloc(query_len * sizeof(Index));
+
+    for(Index peak1 = 0; peak1 < reference_len; peak1++)
     {
         float4 low_bound = reference_mzs[peak1] - tolerance;
         float4 high_bound = reference_mzs[peak1] + tolerance;
+        float4 best_match_peak = 1.0f;
+        float4 best_match_mz = NAN;
+        float4 lowest_delta = FLT_MAX;
+        Index stack_top = 0;
 
-        for(int peak2 = lowest_idx; peak2 < query_len; peak2++)
+        for(Index peak2 = lowest_idx; peak2 < query_len; peak2++)
         {
-            if(query_mzs[peak2] > high_bound)
+            if(float4_gt(query_mzs[peak2], high_bound))
+            {
+                elog(NOTICE, "break [%f,%f]", reference_mzs[peak1], query_mzs[peak2]);
                 break;
+            }
 
-            lowest_idx = peak2 + 1;
-
-            if(query_mzs[peak2] < low_bound)
+            if(float4_lt(query_mzs[peak2], low_bound))
+            {
+                elog(NOTICE, "skip [%f,%f]", reference_mzs[peak1], query_mzs[peak2]);
+                lowest_idx = peak2;
                 continue;
+            }
 
-            matches++;
-            score += calc_score(reference_peaks[peak1], query_peaks[peak2], reference_mzs[peak1], query_mzs[peak2], intensity_power, mz_power);
-            break;
+            if(float4_lt(fabs(float4_mi(query_peaks[peak2], reference_peaks[peak1])), lowest_delta) && !query_used[peak2])
+            {
+                query_stack[stack_top++] = peak2;
+                lowest_delta = fabs(float4_mi(query_peaks[peak2], reference_peaks[peak1]));
+                elog(NOTICE, "stacked [%f,%f]", reference_mzs[peak1], query_mzs[peak2]);
+            }
+        }
+
+        if(stack_top > 0)
+        {
+            Index forward = peak1 + 1;
+            while(true)
+            {
+                if(float4_gt(reference_mzs[forward], query_mzs[query_stack[stack_top - 1]] + tolerance))
+                {
+                    elog(NOTICE, "forward break [%f,%f]", reference_mzs[forward], query_mzs[query_stack[stack_top - 1]]);
+                    query_used[query_stack[stack_top - 1]] = 1;
+                    best_match_peak = query_peaks[query_stack[stack_top - 1]];
+                    best_match_mz = query_mzs[query_stack[stack_top - 1]];
+                    break;
+                }
+
+                if(float4_lt(fabs(float4_mi(query_peaks[query_stack[stack_top - 1]], reference_peaks[forward])), lowest_delta))
+                {
+                    elog(NOTICE, "forward colide [%f,%f]", reference_mzs[forward], query_mzs[query_stack[stack_top - 1]]);
+                    lowest_delta = fabs(float4_mi(query_peaks[query_stack[stack_top - 1]], reference_peaks[forward]));
+                    forward = peak1 + 1;
+                    best_match_mz = query_mzs[query_stack[stack_top - 1]];
+                    best_match_peak = query_peaks[query_stack[stack_top - 1]];
+                    stack_top--;
+                    elog(NOTICE, "best match: %f", best_match_peak);
+                }
+
+                if(!stack_top)
+                {
+                    best_match_mz = query_mzs[query_stack[0]];
+                    best_match_peak = query_peaks[query_stack[0]];
+                    elog(NOTICE, "backtrace break");
+                    break;
+                }
+
+                forward++;
+            }
+
+            if(stack_top)
+                score += calc_score(reference_peaks[peak1], best_match_peak, reference_mzs[peak1], best_match_mz, intensity_power, mz_power);
         }
     }
 
@@ -85,7 +142,6 @@ Datum cosine_greedy(PG_FUNCTION_ARGS)
     PG_RETURN_FLOAT4(score);
 }
 
-
 PG_FUNCTION_INFO_V1(cosine_greedy_simple);
 Datum cosine_greedy_simple(PG_FUNCTION_ARGS)
 {
@@ -98,7 +154,8 @@ Datum cosine_greedy_simple(PG_FUNCTION_ARGS)
     float4 *restrict reference_peaks = NULL;
     float4 *restrict query_mzs = NULL;
     float4 *restrict query_peaks = NULL;
-    size_t matches = 0;
+    Index *restrict query_used = NULL;
+    Index *restrict query_stack = NULL;
     Index lowest_idx = 0;
     float4 score = 0.0f;
 
@@ -120,24 +177,74 @@ Datum cosine_greedy_simple(PG_FUNCTION_ARGS)
     query_mzs = (float4 *) ARR_DATA_PTR(query);
     query_peaks = query_mzs + query_len;
 
-    for(int peak1 = 0; peak1 < reference_len; peak1++)
+    query_used = palloc0(query_len * sizeof(Index));
+    query_stack = palloc(query_len * sizeof(Index));
+
+    for(Index peak1 = 0; peak1 < reference_len; peak1++)
     {
         float4 low_bound = reference_mzs[peak1] - tolerance;
         float4 high_bound = reference_mzs[peak1] + tolerance;
+        float4 best_match = 1.0f;
+        float4 lowest_delta = FLT_MAX;
+        Index stack_top = 0;
 
-        for(int peak2 = lowest_idx; peak2 < query_len; peak2++)
+        for(Index peak2 = lowest_idx; peak2 < query_len; peak2++)
         {
-            if(query_mzs[peak2] > high_bound)
+            if(float4_gt(query_mzs[peak2], high_bound))
+            {
+                elog(NOTICE, "break [%f,%f]", reference_mzs[peak1], query_mzs[peak2]);
                 break;
+            }
 
-            lowest_idx = peak2 + 1;
-
-            if(query_mzs[peak2] < low_bound)
+            if(float4_lt(query_mzs[peak2], low_bound))
+            {
+                elog(NOTICE, "skip [%f,%f]", reference_mzs[peak1], query_mzs[peak2]);
+                lowest_idx = peak2;
                 continue;
+            }
 
-            matches++;
-            score += reference_peaks[peak1] * query_peaks[peak2];
-            break;
+            if(float4_lt(fabs(float4_mi(query_peaks[peak2], reference_peaks[peak1])), lowest_delta) && !query_used[peak2])
+            {
+                query_stack[stack_top++] = peak2;
+                lowest_delta = fabs(float4_mi(query_peaks[peak2], reference_peaks[peak1]));
+                elog(NOTICE, "stacked [%f,%f]", reference_mzs[peak1], query_mzs[peak2]);
+            }
+        }
+
+        if(stack_top > 0)
+        {
+            Index forward = peak1 + 1;
+            while(true)
+            {
+                if(float4_gt(reference_mzs[forward], query_mzs[query_stack[stack_top - 1]] + tolerance))
+                {
+                    elog(NOTICE, "forward break [%f,%f]", reference_mzs[forward], query_mzs[query_stack[stack_top - 1]]);
+                    query_used[query_stack[stack_top - 1]] = 1;
+                    best_match = query_peaks[query_stack[stack_top - 1]];
+                    break;
+                }
+
+                if(float4_lt(fabs(float4_mi(query_peaks[query_stack[stack_top - 1]], reference_peaks[forward])), lowest_delta))
+                {
+                    elog(NOTICE, "forward colide [%f,%f]", reference_mzs[forward], query_mzs[query_stack[stack_top - 1]]);
+                    lowest_delta = fabs(float4_mi(query_peaks[query_stack[stack_top - 1]], reference_peaks[forward]));
+                    forward = peak1 + 1;
+                    best_match = query_peaks[query_stack[--stack_top]];
+                    elog(NOTICE, "best match: %f", best_match);
+                }
+
+                if(!stack_top)
+                {
+                    best_match = query_peaks[query_stack[0]];
+                    elog(NOTICE, "backtrace break");
+                    break;
+                }
+
+                forward++;
+            }
+
+            if(stack_top)
+                score += reference_peaks[peak1] * best_match;
         }
     }
 
