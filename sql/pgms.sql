@@ -71,20 +71,10 @@ CREATE OR REPLACE FUNCTION load_from_mgf(varchar)
 --- @param spectrum reference spectrum
 --- @param spectrum query spectrum
 --- @param float4 tolerance
---- @return cosine greedy similarity score
-CREATE OR REPLACE FUNCTION cosine_greedy(spectrum, spectrum, float4=0.1)
-    RETURNS float4
-    AS 'cosine_greedy','cosine_greedy_simple'
-    LANGUAGE C IMMUTABLE PARALLEL SAFE STRICT COST 100;
-
---- Compute cosine greedy similarity score
---- @param spectrum reference spectrum
---- @param spectrum query spectrum
---- @param float4 tolerance
 --- @param float4 mass power
 --- @param float4 intenzity power
 --- @return cosine greedy similarity score
-CREATE OR REPLACE FUNCTION cosine_greedy(spectrum, spectrum, float4, float4, float4)
+CREATE OR REPLACE FUNCTION cosine_greedy(spectrum, spectrum, float4=0.1, float4=0.0, float4=1.0)
     RETURNS float4
     AS 'cosine_greedy'
     LANGUAGE C IMMUTABLE PARALLEL SAFE STRICT COST 1000;

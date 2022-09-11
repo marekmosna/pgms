@@ -4,7 +4,7 @@ BEGIN;
 \i test/pgtap-core.sql
 \i sql/pgms.sql
 
-SELECT plan(27);
+SELECT plan(26);
 
 SELECT has_type('spectrum');
 ---SELECT has_type('spectrumrange');
@@ -20,7 +20,6 @@ SELECT function_returns('spectrum_normalize', 'spectrum');
 
 SELECT has_function('cosine_greedy');
 SELECT has_function('cosine_greedy', ARRAY['spectrum', 'spectrum', 'real', 'real', 'real']);
-SELECT has_function('cosine_greedy', ARRAY['spectrum', 'spectrum', 'real']);
 SELECT function_returns('cosine_greedy', 'real');
 
 SELECT has_function('spectrum_range');
