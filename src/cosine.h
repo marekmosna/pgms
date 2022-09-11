@@ -28,31 +28,20 @@ static inline float4 calc_norm(const float4 *restrict intensities,
     const float4 intensity_power,
     const float4 mz_power)
 {
-    float4 result = 0;
+    float4 result = 0.0f;
 
     for(size_t i = 0; i < len; i++)
     {
         if(float4_eq(mz_power, 0.0))
         {
             if(float4_eq(intensity_power, 1.0))
-                result += float4_mul(intensities[i], intensities[i]);
+                result = float4_pl(result, float4_mul(intensities[i], intensities[i]));
             else
-                result += powf(intensities[i], 2 * intensity_power);
+                result = float4_pl(result, powf(intensities[i], 2 * intensity_power));
         }
         else
-            result += powf(mz[i], 2 * mz_power) * powf(intensities[i], 2 * intensity_power);
+            result = float4_pl(result, powf(mz[i], 2 * mz_power) * powf(intensities[i], 2 * intensity_power));
     }
-
-    return result;
-}
-
-
-static inline float calc_simple_norm(float *restrict spec_intensities, int len)
-{
-    float result = 0;
-
-    for(int i = 0; i < len; i++)
-        result += spec_intensities[i] * spec_intensities[i];
 
     return result;
 }
