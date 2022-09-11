@@ -1,0 +1,6 @@
+\set ECHO none
+1..4
+ok 1 - cosine_modified should be 0.081966
+ok 2 - cosine_modified should be 0.967873
+ok 3 - cosine_modified should be 0.617945
+ok 4 - cosine_modified should be 0.000000
