@@ -129,6 +129,8 @@ Datum cosine_greedy(PG_FUNCTION_ARGS)
         score /= sqrtf(norm1 * norm2);
     }
 
+    pfree(query_used);
+    pfree(query_stack);
     PG_FREE_IF_COPY(reference, 0);
     PG_FREE_IF_COPY(query, 1);
 
@@ -256,6 +258,8 @@ Datum cosine_greedy_simple(PG_FUNCTION_ARGS)
         score /= sqrtf(norm1 * norm2);
     }
 
+    pfree(query_used);
+    pfree(query_stack);
     PG_FREE_IF_COPY(reference, 0);
     PG_FREE_IF_COPY(query, 1);
 

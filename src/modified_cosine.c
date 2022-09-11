@@ -78,13 +78,13 @@ Datum modified_cosine(PG_FUNCTION_ARGS)
         {
             if(float4_gt(query_mzs[peak2], high_bound))
             {
-                elog(DEBUG1, "break0 [%f,%f]", reference_mzs[reference_index], query_mzs[peak2]);
+                elog(DEBUG1, "break [%f,%f]", reference_mzs[reference_index], query_mzs[peak2]);
                 break;
             }
 
             if(float4_lt(query_mzs[peak2], low_bound))
             {
-                elog(DEBUG1, "skip0 [%f,%f]", reference_mzs[reference_index], query_mzs[peak2]);
+                elog(DEBUG1, "skip [%f,%f]", reference_mzs[reference_index], query_mzs[peak2]);
                 continue;
             }
 
@@ -92,7 +92,7 @@ Datum modified_cosine(PG_FUNCTION_ARGS)
             {
                 query_stack[stack_top++] = peak2;
                 highest_intensity = query_peaks[peak2];
-                elog(DEBUG1, "stacked0 [%f,%f]", reference_mzs[reference_index], query_mzs[peak2]);
+                elog(DEBUG1, "stacked [%f,%f]", reference_mzs[reference_index], query_mzs[peak2]);
             }
         }
 
