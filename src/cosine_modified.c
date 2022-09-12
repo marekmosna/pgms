@@ -25,8 +25,8 @@
 
 PG_MODULE_MAGIC;
 
-PG_FUNCTION_INFO_V1(modified_cosine);
-Datum modified_cosine(PG_FUNCTION_ARGS)
+PG_FUNCTION_INFO_V1(cosine_modified);
+Datum cosine_modified(PG_FUNCTION_ARGS)
 {
     int ndims = 0;
     int *dims = NULL;
