@@ -1,0 +1,6 @@
+\set ECHO none
+1..4
+ok 1 - json parser should deal with NULL json
+ok 2 - json parser should deal with empty json
+ok 3 - json parser should deal with empty json
+ok 4 - json parser should deal with sign fixures

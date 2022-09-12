@@ -408,9 +408,6 @@ bool parser_next(struct Parser* parser)
                 spectrums = lappend(spectrums, mzs);
                 spectrums = lappend(spectrums, peaks);
 
-                if(!OidIsValid(spectrumOid))
-                    spectrumOid = TypenameGetTypid("spectrum");
-                
                 idx = find_column_by_oid(parser->meta->tupdesc, spectrumOid);
                 parser_set_column_array(parser, idx, spectrums, SPECTRUM_ARRAY_DIM);
                 list_free_deep(spectrums);
@@ -531,6 +528,9 @@ Datum load_mgf_varchar(PG_FUNCTION_ARGS)
         if(get_call_result_type(fcinfo, NULL, &tuple_desc) != TYPEFUNC_COMPOSITE)
             ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED)
                 , errmsg("unsupported return type")));
+
+        if(!OidIsValid(spectrumOid))
+            spectrumOid = TypenameGetTypid("spectrum");
 
         funcctx->attinmeta = TupleDescGetAttInMetadata(tuple_desc);
         parser = parser_init_varchar(PG_GETARG_VARCHAR_P(0), funcctx->attinmeta);
