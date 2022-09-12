@@ -188,7 +188,7 @@ $BODY$
 --- @return modified cosine similarity score
 CREATE OR REPLACE FUNCTION cosine_modified(spectrum, spectrum, float4, float4=0.1, float4=0.0, float4=1.0)
     RETURNS float4
-    AS 'modified_cosine', 'modified_cosine'
+    AS 'cosine_modified'
     LANGUAGE C IMMUTABLE PARALLEL SAFE STRICT COST 1000;
 
 --- Compute intersection of masses as similarity score
