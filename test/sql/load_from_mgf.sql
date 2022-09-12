@@ -4,7 +4,7 @@ BEGIN;
 \i test/pgtap-core.sql
 \i sql/pgms.sql
 
-SELECT plan(12);
+SELECT plan(13);
 
 SELECT is_empty(
     $$ SELECT FROM load_from_mgf('$$||v||$$') AS (s spectrum) $$,
@@ -92,6 +92,14 @@ TITLE=computed parameter
 END IONS
 '
 ]) AS v;
+
+\lo_import ./test/data.mgf
+
+SELECT results_eq(
+    $$ SELECT "TITLE" FROM load_from_mgf( ('$$||:LASTOID||$$')::Oid ) AS ("TITLE" varchar) $$,
+    $$ VALUES('Global title'), ('Local title') $$,
+    'mgf parser should deal with global parameters'
+);
 
 SELECT * FROM finish();
 ROLLBACK;
