@@ -22,6 +22,7 @@
 #include <plpgsql.h>
 #include <utils/builtins.h>
 #include <catalog/pg_type.h>
+#include <catalog/namespace.h>
 #if PG_VERSION_NUM >= 130000
     #include <utils/jsonb.h>
 #else
@@ -149,6 +150,7 @@ void json_ctx_next(AttInMetadata *attinmeta, json_ctx_t *json_ctx)
     {
         JsonbValue val = { 0 };
         JsonbIteratorToken state = JsonbIteratorNext(&json_ctx->it, &val, false);
+        elog(DEBUG1, "json state %d", state);
         switch (state)
         {
             case WJB_KEY:
@@ -237,7 +239,7 @@ void json_ctx_next(AttInMetadata *attinmeta, json_ctx_t *json_ctx)
                 break;
         }
         resetStringInfo(data);
-    } while (json_ctx->state != WJB_DONE);
+    } while (json_ctx->state != WJB_DONE && json_ctx->cnt);
 
     pfree(data->data);
     pfree(data);
@@ -261,8 +263,12 @@ Datum load_from_json(PG_FUNCTION_ARGS)
             ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED)
                 , errmsg("unsupported return type")));
 
+        if(!OidIsValid(spectrumOid))
+            spectrumOid = TypenameGetTypid("spectrum");
+
         funcctx->attinmeta = TupleDescGetAttInMetadata(tuple_desc);
         funcctx->user_fctx = (void*) json_ctx_create(PG_GETARG_JSONB_P(0), tuple_desc);
+        elog(DEBUG1, "records: %ld", ((json_ctx_t*)funcctx->user_fctx)->cnt);
         MemoryContextSwitchTo(oldcontext);
     }
 
@@ -298,9 +304,13 @@ Datum load_from_json(PG_FUNCTION_ARGS)
 
 void _PG_init()
 {
+    Oid spaceid = LookupExplicitNamespace("pgms", true);
+    if(OidIsValid(spaceid))
+    {
 #if PG_VERSION_NUM >= 120000
-    spectrumOid = GetSysCacheOid1(TYPENAMENSP, Anum_pg_type_oid, PointerGetDatum("spectrum"));
+        spectrumOid = GetSysCacheOid2(TYPENAMENSP, Anum_pg_type_oid, PointerGetDatum("spectrum"), ObjectIdGetDatum(spaceid));
 #else
-    spectrumOid = GetSysCacheOid1(TYPENAMENSP, PointerGetDatum("spectrum"));
+        spectrumOid = GetSysCacheOid2(TYPENAMENSP, PointerGetDatum("spectrum"), ObjectIdGetDatum(spaceid));
 #endif
+    }
 }
