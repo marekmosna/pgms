@@ -1,5 +1,5 @@
 \set ECHO none
-1..12
+1..13
 ok 1 - mgf parser should deal with none mgf format
 ok 2 - mgf parser should deal with none mgf format
 ok 3 - mgf parser should deal with none mgf format
@@ -12,3 +12,4 @@ ok 9 - mgf parser should deal with arrays
 ok 10 - mgf parser should deal with comments
 ok 11 - mgf parser should deal with global parameters
 ok 12 - mgf parser should deal with global parameters
+ok 13 - mgf parser should deal with global parameters

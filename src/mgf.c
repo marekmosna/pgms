@@ -478,6 +478,9 @@ Datum load_mgf_lo(PG_FUNCTION_ARGS)
             ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED)
                 , errmsg("unsupported return type")));
 
+        if(!OidIsValid(spectrumOid))
+            spectrumOid = TypenameGetTypid("spectrum");
+
         funcctx->attinmeta = TupleDescGetAttInMetadata(tuple_desc);
         parser = parser_init_lob(
             inv_open(PG_GETARG_OID(0), INV_READ, funcctx->multi_call_memory_ctx)
