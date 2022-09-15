@@ -4,7 +4,7 @@ BEGIN;
 \i test/pgtap-core.sql
 \i sql/pgms.sql
 
-SELECT plan(26);
+SELECT plan(28);
 
 SELECT has_type('spectrum');
 ---SELECT has_type('spectrumrange');
@@ -41,6 +41,9 @@ SELECT function_returns('intersect_mz', 'real');
 SELECT has_function('precurzor_mz_match');
 SELECT has_function('precurzor_mz_match', ARRAY['real', 'real', 'real', 'character varying']);
 SELECT function_returns('precurzor_mz_match', 'real');
+SELECT has_function('precurzor_mz_match', ARRAY['real[]', 'real[]', 'real', 'character varying', 'boolean']);
+SELECT function_returns('precurzor_mz_match', ARRAY['real[]', 'real[]', 'real', 'character varying', 'boolean'], 'real[]');
+
 
 SELECT * FROM finish();
 ROLLBACK;

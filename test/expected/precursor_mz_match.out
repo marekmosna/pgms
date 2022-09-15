@@ -1,0 +1,5 @@
+\set ECHO none
+1..3
+ok 1 - precurzor_mz_match should be 0.0
+ok 2 - precurzor_mz_match should be 1.0
+ok 3 - precurzor_mz_match should be 1.0
