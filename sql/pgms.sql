@@ -211,3 +211,14 @@ CREATE OR REPLACE FUNCTION precurzor_mz_match(float4, float4, float4=1.0, varcha
     AS 'precurzor_mz_match'
     LANGUAGE C IMMUTABLE PARALLEL SAFE STRICT COST 1000;
 
+--- Compute  similarity score based on precursor
+--- @param float4[] reference precursor array
+--- @param float4[] query precursor array
+--- @param float4 tolerance
+--- @param varchar type of tolerance [Dalton, ppm](default 'Dalton')
+--- @param boolean is symetric
+--- @return precursor similarity score array
+CREATE OR REPLACE FUNCTION precurzor_mz_match(float4[], float4[], float4=1.0, varchar='Dalton', boolean=false)
+    RETURNS float4[]
+    AS 'precurzor_mz_match', 'precurzor_mz_match_array'
+    LANGUAGE C IMMUTABLE PARALLEL SAFE STRICT COST 1000;
