@@ -222,3 +222,17 @@ CREATE OR REPLACE FUNCTION precurzor_mz_match(float4[], float4[], float4=1.0, va
     RETURNS float4[]
     AS 'precurzor_mz_match', 'precurzor_mz_match_array'
     LANGUAGE C IMMUTABLE PARALLEL SAFE STRICT COST 1000;
+
+--- Compute neutral losses cosine similarity score
+--- @param spectrum reference spectrum
+--- @param spectrum query spectrum
+--- @param float4 reference presursor_mz
+--- @param float4 query_ presursor_mz
+--- @param float4 tolerance (default value 1.0)
+--- @param float4 mass power (default value 0.0)
+--- @param float4 intenzity power (default value 1.0)
+--- @return neutral losses cosine similarity score
+CREATE FUNCTION cosine_neutral_losses(spectrum, spectrum, float4, float4, float4=0.1, float4=0.0, float4=1.0)
+  RETURNS float4
+  AS 'cosine_neutral_losses'
+  LANGUAGE C IMMUTABLE PARALLEL SAFE STRICT COST 1000;
