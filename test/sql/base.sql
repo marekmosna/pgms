@@ -4,7 +4,7 @@ BEGIN;
 \i test/pgtap-core.sql
 \i sql/pgms.sql
 
-SELECT plan(28);
+SELECT plan(31);
 
 SELECT has_type('spectrum');
 ---SELECT has_type('spectrumrange');
@@ -43,6 +43,10 @@ SELECT has_function('precurzor_mz_match', ARRAY['real', 'real', 'real', 'charact
 SELECT function_returns('precurzor_mz_match', 'real');
 SELECT has_function('precurzor_mz_match', ARRAY['real[]', 'real[]', 'real', 'character varying', 'boolean']);
 SELECT function_returns('precurzor_mz_match', ARRAY['real[]', 'real[]', 'real', 'character varying', 'boolean'], 'real[]');
+
+SELECT has_function('cosine_neutral_losses');
+SELECT has_function('cosine_neutral_losses', ARRAY['spectrum', 'spectrum', 'real', 'real', 'real', 'real', 'real']);
+SELECT function_returns('cosine_neutral_losses', 'real');
 
 
 SELECT * FROM finish();

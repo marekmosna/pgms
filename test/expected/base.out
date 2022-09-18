@@ -1,5 +1,5 @@
 \set ECHO none
-1..28
+1..31
 ok 1 - Type spectrum should exist
 ok 2 - Function load_from_mgf() should exist
 ok 3 - Function load_from_mgf(character varying) should exist
@@ -28,3 +28,6 @@ ok 25 - Function precurzor_mz_match(real, real, real, character varying) should 
 ok 26 - Function precurzor_mz_match() should return real
 ok 27 - Function precurzor_mz_match(real[], real[], real, character varying, boolean) should exist
 ok 28 - Function precurzor_mz_match(real[], real[], real, character varying, boolean) should return real[]
+ok 29 - Function cosine_neutral_losses() should exist
+ok 30 - Function cosine_neutral_losses(spectrum, spectrum, real, real, real, real, real) should exist
+ok 31 - Function cosine_neutral_losses() should return real
