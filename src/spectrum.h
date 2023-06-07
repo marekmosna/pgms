@@ -23,3 +23,6 @@ extern Oid spectrumOid;
 
 extern Datum spectrum_input(PG_FUNCTION_ARGS);
 extern Datum spectrum_output(PG_FUNCTION_ARGS);
+
+extern size_t spectrum_length(Datum);
+extern float4* spectrum_data(Datum);
