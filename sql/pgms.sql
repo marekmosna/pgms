@@ -9,12 +9,12 @@ CREATE TYPE spectrumrange AS RANGE (
 
 CREATE OR REPLACE FUNCTION spectrum_input(cstring)
     RETURNS spectrum
-    AS 'spectrum'
+    AS 'pgms'
     LANGUAGE C IMMUTABLE PARALLEL SAFE STRICT;
 
 CREATE OR REPLACE FUNCTION spectrum_output(spectrum)
     RETURNS cstring
-    AS 'spectrum'
+    AS 'pgms'
     LANGUAGE C IMMUTABLE PARALLEL SAFE STRICT;
 
 CREATE TYPE spectrum
@@ -47,7 +47,7 @@ CREATE CAST (float[][] AS spectrum)
 ---);
 CREATE OR REPLACE FUNCTION load_from_mgf(Oid)
     RETURNS SETOF record
-    AS 'mgf', 'load_mgf_lo'
+    AS 'pgms', 'load_mgf_lo'
     LANGUAGE C IMMUTABLE PARALLEL SAFE STRICT;
 
 --- Read given text literal in Mascote Generic Format and returns the set of records
@@ -64,7 +64,7 @@ CREATE OR REPLACE FUNCTION load_from_mgf(Oid)
 ---);
 CREATE OR REPLACE FUNCTION load_from_mgf(varchar)
     RETURNS SETOF record
-    AS 'mgf', 'load_mgf_varchar'
+    AS 'pgms', 'load_mgf_varchar'
     LANGUAGE C IMMUTABLE PARALLEL SAFE STRICT;
 
 --- Compute cosine greedy similarity score
@@ -76,7 +76,7 @@ CREATE OR REPLACE FUNCTION load_from_mgf(varchar)
 --- @return cosine greedy similarity score
 CREATE OR REPLACE FUNCTION cosine_greedy(spectrum, spectrum, float4=0.1, float4=0.0, float4=1.0)
     RETURNS float4
-    AS 'cosine_greedy'
+    AS 'pgms'
     LANGUAGE C IMMUTABLE PARALLEL SAFE STRICT COST 1000;
 
 --- Compute cosine hungarian similarity score
@@ -88,7 +88,7 @@ CREATE OR REPLACE FUNCTION cosine_greedy(spectrum, spectrum, float4=0.1, float4=
 --- @return cosine hungarian similarity score
 CREATE FUNCTION cosine_hungarian(spectrum, spectrum, float4=0.1, float4=0.0, float4=1.0)
     RETURNS float4
-    AS 'cosine_hungarian'
+    AS 'pgms'
     LANGUAGE C IMMUTABLE PARALLEL SAFE STRICT COST 1000;
 
 --- Normalize mass spectrum (provides peaks in interval <0, 1>)
@@ -147,11 +147,11 @@ $BODY$
 ---      ]
 ---  ]
 --- }'::jsonb) as (
----    spectrum pgms.spectrum
+---    "peak_json" pgms.spectrum
 ---);
 CREATE OR REPLACE FUNCTION load_from_json(jsonb)
     RETURNS SETOF record
-    AS 'json'
+    AS 'pgms'
     LANGUAGE C IMMUTABLE PARALLEL SAFE STRICT;
 
 --- In case of float4 mass precursor function just returns its value. In case of array of values the function returns the 1st value of array
@@ -188,7 +188,7 @@ $BODY$
 --- @return modified cosine similarity score
 CREATE OR REPLACE FUNCTION cosine_modified(spectrum, spectrum, float4, float4=0.1, float4=0.0, float4=1.0)
     RETURNS float4
-    AS 'cosine_modified'
+    AS 'pgms'
     LANGUAGE C IMMUTABLE PARALLEL SAFE STRICT COST 1000;
 
 --- Compute intersection of masses as similarity score
@@ -198,7 +198,7 @@ CREATE OR REPLACE FUNCTION cosine_modified(spectrum, spectrum, float4, float4=0.
 --- @return intersection similarity score
 CREATE OR REPLACE FUNCTION intersect_mz(spectrum, spectrum, float4=0.1)
     RETURNS float4
-    AS 'intersect_mz_match' LANGUAGE C IMMUTABLE PARALLEL SAFE STRICT COST 1000;
+    AS 'pgms' LANGUAGE C IMMUTABLE PARALLEL SAFE STRICT COST 1000;
 
 --- Compute  similarity score based on precursor
 --- @param float4 reference precursor
@@ -208,7 +208,7 @@ CREATE OR REPLACE FUNCTION intersect_mz(spectrum, spectrum, float4=0.1)
 --- @return precursor similarity score
 CREATE OR REPLACE FUNCTION precurzor_mz_match(float4, float4, float4=1.0, varchar='Dalton')
     RETURNS float4
-    AS 'precurzor_mz_match'
+    AS 'pgms'
     LANGUAGE C IMMUTABLE PARALLEL SAFE STRICT COST 1000;
 
 --- Compute  similarity score based on precursor
@@ -220,7 +220,7 @@ CREATE OR REPLACE FUNCTION precurzor_mz_match(float4, float4, float4=1.0, varcha
 --- @return precursor similarity score array
 CREATE OR REPLACE FUNCTION precurzor_mz_match(float4[], float4[], float4=1.0, varchar='Dalton', boolean=false)
     RETURNS float4[]
-    AS 'precurzor_mz_match', 'precurzor_mz_match_array'
+    AS 'pgms', 'precurzor_mz_match_array'
     LANGUAGE C IMMUTABLE PARALLEL SAFE STRICT COST 1000;
 
 --- Compute neutral losses cosine similarity score
@@ -234,5 +234,5 @@ CREATE OR REPLACE FUNCTION precurzor_mz_match(float4[], float4[], float4=1.0, va
 --- @return neutral losses cosine similarity score
 CREATE FUNCTION cosine_neutral_losses(spectrum, spectrum, float4, float4, float4=0.1, float4=0.0, float4=1.0)
   RETURNS float4
-  AS 'cosine_neutral_losses'
+  AS 'pgms'
   LANGUAGE C IMMUTABLE PARALLEL SAFE STRICT COST 1000;

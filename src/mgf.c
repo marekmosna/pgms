@@ -17,6 +17,7 @@
 
 #include "mgf.h"
 #include "pgms.h"
+#include "spectrum.h"
 
 #include <utils/builtins.h>
 #include <catalog/pg_type.h>
@@ -34,10 +35,6 @@
 #define END_IONS_STR            "END IONS"
 #define COMMENT_STR             "#;!/"
 #define BUFFER_SIZE             (1 << 20) //1MB
-
-PG_MODULE_MAGIC;
-
-static Oid spectrumOid = InvalidOid;
 
 typedef enum 
 {
@@ -561,17 +558,4 @@ Datum load_mgf_varchar(PG_FUNCTION_ARGS)
 
     parser_close(parser);
     SRF_RETURN_DONE(funcctx);
-}
-
-void _PG_init()
-{
-    Oid spaceid = LookupExplicitNamespace("pgms", true);
-    if(OidIsValid(spaceid))
-    {
-#if PG_VERSION_NUM >= 120000
-        spectrumOid = GetSysCacheOid2(TYPENAMENSP, Anum_pg_type_oid, PointerGetDatum("spectrum"), ObjectIdGetDatum(spaceid));
-#else
-        spectrumOid = GetSysCacheOid2(TYPENAMENSP, PointerGetDatum("spectrum"), ObjectIdGetDatum(spaceid));
-#endif
-    }
 }

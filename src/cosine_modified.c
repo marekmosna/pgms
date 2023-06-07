@@ -23,8 +23,6 @@
 #include <utils/array.h>
 #include "cosine.h"
 
-PG_MODULE_MAGIC;
-
 PG_FUNCTION_INFO_V1(cosine_modified);
 Datum cosine_modified(PG_FUNCTION_ARGS)
 {

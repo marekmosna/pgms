@@ -23,8 +23,6 @@
 #include <utils/array.h>
 #include "cosine.h"
 
-PG_MODULE_MAGIC;
-
 PG_FUNCTION_INFO_V1(cosine_neutral_losses);
 Datum cosine_neutral_losses(PG_FUNCTION_ARGS)
 {

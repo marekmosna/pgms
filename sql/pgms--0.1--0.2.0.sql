@@ -24,7 +24,7 @@
 ---      ]
 ---  ]
 --- }'::jsonb) as (
----    spectrum pgms.spectrum
+---    "peak_json" pgms.spectrum
 ---);
 CREATE FUNCTION load_from_json(jsonb) RETURNS SETOF record AS 'MODULE_PATHNAME' LANGUAGE C IMMUTABLE PARALLEL SAFE STRICT;
 

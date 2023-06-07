@@ -26,8 +26,6 @@
 #define DALTON_TYPE "Dalton"
 #define PPM_TYPE    "ppm"
 
-PG_MODULE_MAGIC;
-
 typedef enum {
     DALTON,
     PPM

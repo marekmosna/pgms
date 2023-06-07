@@ -33,9 +33,6 @@
 
 #include <utils/syscache.h>
 
-PG_MODULE_MAGIC;
-static Oid spectrumOid;
-
 typedef struct
 {
     JsonbIterator   *it;
@@ -300,17 +297,4 @@ Datum load_from_json(PG_FUNCTION_ARGS)
 
     json_ctx_free(json_ctx);
     SRF_RETURN_DONE(funcctx);
-}
-
-void _PG_init()
-{
-    Oid spaceid = LookupExplicitNamespace("pgms", true);
-    if(OidIsValid(spaceid))
-    {
-#if PG_VERSION_NUM >= 120000
-        spectrumOid = GetSysCacheOid2(TYPENAMENSP, Anum_pg_type_oid, PointerGetDatum("spectrum"), ObjectIdGetDatum(spaceid));
-#else
-        spectrumOid = GetSysCacheOid2(TYPENAMENSP, PointerGetDatum("spectrum"), ObjectIdGetDatum(spaceid));
-#endif
-    }
 }
