@@ -15,22 +15,18 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <float.h>
 #include <postgres.h>
 #include <fmgr.h>
-#include <utils/array.h>
 #include <utils/float.h>
-#include <utils/array.h>
+
 #include "cosine.h"
+#include "spectrum.h"
 
 PG_FUNCTION_INFO_V1(cosine_modified);
 Datum cosine_modified(PG_FUNCTION_ARGS)
 {
-    int ndims = 0;
-    int *dims = NULL;
-    int nitems = 0;
-    int reference_len = 0;
-    int query_len = 0;
+    size_t reference_len = 0;
+    size_t query_len = 0;
     float4 *restrict reference_mzs = NULL;
     float4 *restrict reference_peaks = NULL;
     float4 *restrict query_mzs = NULL;
@@ -40,36 +36,30 @@ Datum cosine_modified(PG_FUNCTION_ARGS)
     Index lowest_idx = 0;
     float4 score = 0.0f;
 
-    ArrayType *reference = PG_GETARG_ARRAYTYPE_P(0);
-    ArrayType *query = PG_GETARG_ARRAYTYPE_P(1);
+    Datum reference = PG_GETARG_DATUM(0);
+    Datum query = PG_GETARG_DATUM(1);
     const float4 shift = PG_GETARG_FLOAT4(2);
     const float4 tolerance = PG_GETARG_FLOAT4(3);
     const float4 mz_power = PG_GETARG_FLOAT4(4);
     const float4 intensity_power = PG_GETARG_FLOAT4(5);
 
-    ndims = ARR_NDIM(reference);
-    dims = ARR_DIMS(reference);
-    nitems = ArrayGetNItems(ndims, dims);
-    reference_len = nitems / ndims;
-    reference_mzs = (float4 *) ARR_DATA_PTR(reference);
+    reference_len = spectrum_length(reference);
+    reference_mzs = spectrum_data(reference);
     reference_peaks = reference_mzs + reference_len;
 
-    ndims = ARR_NDIM(query);
-    dims = ARR_DIMS(query);
-    nitems = ArrayGetNItems(ndims, dims);
-    query_len = nitems / ndims;
-    query_mzs = (float4 *) ARR_DATA_PTR(query);
+    query_len = spectrum_length(query);
+    query_mzs = spectrum_data(query);
     query_peaks = query_mzs + query_len;
 
-    query_used = palloc0(query_len * sizeof(Index));
-    query_stack = palloc(query_len * sizeof(Index));
+    query_used = (Index*) palloc0(query_len * sizeof(Index));
+    query_stack = (Index*) palloc(query_len * sizeof(Index));
 
     for(Index reference_index = 0; reference_index < reference_len; reference_index++)
     {
         float4 low_bound = reference_mzs[reference_index] - tolerance;
         float4 high_bound = reference_mzs[reference_index] + tolerance;
         float4 best_match_peak = 1.0f;
-        float4 highest_intensity = FLT_MIN;
+        float4 highest_intensity = -get_float4_infinity();
         Index stack_top = 0;
 
         for(Index peak2 = lowest_idx; peak2 < query_len; peak2++)
@@ -183,8 +173,8 @@ Datum cosine_modified(PG_FUNCTION_ARGS)
 
     pfree(query_used);
     pfree(query_stack);
-    PG_FREE_IF_COPY(reference, 0);
-    PG_FREE_IF_COPY(query, 1);
+    PG_FREE_IF_COPY(PG_DETOAST_DATUM(reference), 0);
+    PG_FREE_IF_COPY(PG_DETOAST_DATUM(query), 1);
 
     if(float4_lt(score, 0.0f))
         score = 0.0f;

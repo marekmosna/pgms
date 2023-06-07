@@ -21,6 +21,7 @@
 
 #include <catalog/pg_type.h>
 #include <utils/lsyscache.h>
+#include <utils/array.h>
 
 Oid spectrumOid;
 
@@ -52,4 +53,19 @@ Datum spectrum_output(PG_FUNCTION_ARGS)
     fmgr_info(outfuncid, &outfuncinfo);
     elog(DEBUG1, "out_fnc(%d), ioparams(%d)",outfuncid, ioparams);
     PG_RETURN_CSTRING(OutputFunctionCall(&outfuncinfo, PG_GETARG_DATUM(0)));
+}
+
+size_t spectrum_length(Datum spectrum)
+{
+    ArrayType *s = DatumGetArrayTypeP(spectrum);
+    int ndims = ARR_NDIM(s);
+    int *dims = ARR_DIMS(s);
+    int nitems = ArrayGetNItems(ndims, dims);
+    return nitems / ndims;
+}
+
+extern float4* spectrum_data(Datum spectrum)
+{
+    ArrayType *s = DatumGetArrayTypeP(spectrum);
+    return (float4 *) ARR_DATA_PTR(s);
 }
