@@ -266,6 +266,7 @@ Datum cosine_hungarian(PG_FUNCTION_ARGS)
     const float4 tolerance = PG_GETARG_FLOAT4(2);
     const float4 mz_power = PG_GETARG_FLOAT4(3);
     const float4 intensity_power = PG_GETARG_FLOAT4(4);
+    calc_score_func_t calc_score = determine_calc_score(mz_power, intensity_power);
 
     ndims = ARR_NDIM(reference);
     dims = ARR_DIMS(reference);
