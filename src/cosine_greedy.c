@@ -42,6 +42,7 @@ Datum cosine_greedy(PG_FUNCTION_ARGS)
     float4 tolerance = PG_GETARG_FLOAT4(2);
     float4 mz_power = PG_GETARG_FLOAT4(3);
     float4 intensity_power = PG_GETARG_FLOAT4(4);
+    calc_score_func_t calc_score = determine_calc_score(mz_power, intensity_power);
 
     reference_len = spectrum_length(reference);
     reference_mzs = spectrum_data(reference);
