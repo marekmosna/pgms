@@ -17,85 +17,80 @@
 
 #include <postgres.h>
 #include <fmgr.h>
-#include <float.h>
-#include <utils/array.h>
-#include <math.h>
+#include <utils/float.h>
+
+#include "spectrum.h"
 
 PG_FUNCTION_INFO_V1(intersect_mz);
 Datum intersect_mz(PG_FUNCTION_ARGS)
 {
-    int ndims;
-    int *dims;
-    int nitems;
-    size_t reference_len;
-    size_t query_len;
+    size_t reference_len = 0;
+    size_t query_len = 0;
     float4 *restrict reference_mzs;
     float4 *restrict query_mzs;
     size_t count_intersect = 0;
     size_t count_union = 0;
-    Index peak1 = 0;
-    Index peak2 = 0;
+    Index reference_mz = 0;
+    Index query_mz = 0;
+
+    Datum reference = PG_GETARG_DATUM(0);
+    Datum query = PG_GETARG_DATUM(1);
     const float tolerance = PG_GETARG_FLOAT4(2);
-    ArrayType *reference = PG_GETARG_ARRAYTYPE_P(0);
-    ArrayType *query = PG_GETARG_ARRAYTYPE_P(1);
 
-    ndims = ARR_NDIM(reference);
-    dims = ARR_DIMS(reference);
-    nitems = ArrayGetNItems(ndims, dims);
-    reference_len = nitems / ndims;
-    reference_mzs = (float4 *) ARR_DATA_PTR(reference);
+    reference_len = spectrum_length(reference);
+    reference_mzs = spectrum_data(reference);
 
-    ndims = ARR_NDIM(query);
-    dims = ARR_DIMS(query);
-    nitems = ArrayGetNItems(ndims, dims);
-    query_len = nitems / ndims;
-    query_mzs = (float4 *) ARR_DATA_PTR(query);
+    query_len = spectrum_length(query);
+    query_mzs = spectrum_data(query);
 
     elog(DEBUG1, "reference of %ld against query of %ld",
         reference_len, query_len);
 
-    while (peak1 < reference_len && peak2 < query_len)
+    while (reference_mz < reference_len && query_mz < query_len)
     {
-        float4 low_bound = reference_mzs[peak1] - tolerance;
-        float4 high_bound = reference_mzs[peak1] + tolerance;
+        float4 low_bound = reference_mzs[reference_mz] - tolerance;
+        float4 high_bound = reference_mzs[reference_mz] + tolerance;
 
-        if (query_mzs[peak2] < low_bound)
+        if (float4_lt(query_mzs[query_mz], low_bound))
         {
-            peak1++;
+            reference_mz++;
             count_union++;
-            elog(DEBUG1, "too low: ref %f against query %f",low_bound, query_mzs[peak2]);
+            elog(DEBUG1, "too low: ref %f against query %f",low_bound, query_mzs[query_mz]);
         }
-        else if (query_mzs[peak2] > high_bound)
+        else if (float4_gt(query_mzs[query_mz], high_bound))
         {
-            peak2++;
+            query_mz++;
             count_union++;
-            elog(DEBUG1, "too high: shift refquery to %d",peak2);
+            elog(DEBUG1, "too high: shift refquery to %d",query_mz);
         }
         else
         {
             elog(DEBUG1, "intersection on ref %d against query on %d",
-                peak1, peak2);
-            peak1++;
-            peak2++;
+                reference_mz, query_mz);
+            reference_mz++;
+            query_mz++;
             count_union++;
             count_intersect++;
         }
     }
 
-    while (peak1 < reference_len)
+    while (reference_mz < reference_len)
     {
         count_union++;
-        peak1++;
+        reference_mz++;
     }
 
-    while (peak2 < query_len)
+    while (query_mz < query_len)
     {
         count_union++;
-        peak2++;
+        query_mz++;
     }
 
-    PG_FREE_IF_COPY(reference, 0);
-    PG_FREE_IF_COPY(query, 1);
+    PG_FREE_IF_COPY(PG_DETOAST_DATUM(reference), 0);
+    PG_FREE_IF_COPY(PG_DETOAST_DATUM(query), 1);
 
-    PG_RETURN_FLOAT4(count_intersect == 0 ? 0.0f : (float4)count_intersect/(float4)count_union);
+    if(count_intersect)
+        PG_RETURN_FLOAT4(float4_div(count_intersect, count_union));
+    else
+        PG_RETURN_FLOAT4(0.0f);
 }
