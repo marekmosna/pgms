@@ -16,24 +16,22 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <float.h>
 #include <postgres.h>
 #include <fmgr.h>
 #include <utils/array.h>
 #include <utils/float.h>
 
 #include "cosine.h"
-
-PG_MODULE_MAGIC;
+#include "spectrum.h"
 
 PG_FUNCTION_INFO_V1(cosine_greedy);
 Datum cosine_greedy(PG_FUNCTION_ARGS)
 {
     int ndims = 0;
-    int *dims = NULL;
+    int* dims = NULL;
     int nitems = 0;
-    int reference_len = 0;
-    int query_len = 0;
+    size_t reference_len = 0;
+    size_t query_len = 0;
     float4 *restrict reference_mzs = NULL;
     float4 *restrict reference_peaks = NULL;
     float4 *restrict query_mzs = NULL;
@@ -63,15 +61,15 @@ Datum cosine_greedy(PG_FUNCTION_ARGS)
     query_mzs = (float4 *) ARR_DATA_PTR(query);
     query_peaks = query_mzs + query_len;
 
-    query_used = palloc0(query_len * sizeof(Index));
-    query_stack = palloc(query_len * sizeof(Index));
+    query_used = (Index*) palloc0(query_len * sizeof(Index));
+    query_stack = (Index*) palloc(query_len * sizeof(Index));
 
     for(Index reference_index = 0; reference_index < reference_len; reference_index++)
     {
         float4 low_bound = reference_mzs[reference_index] - tolerance;
         float4 high_bound = reference_mzs[reference_index] + tolerance;
         float4 best_match_peak = 1.0f;
-        float4 highest_intensity = FLT_MIN;
+        float4 highest_intensity = -get_float4_infinity();
         Index stack_top = 0;
 
         for(Index query_index = lowest_idx; query_index < query_len; query_index++)

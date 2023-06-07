@@ -17,11 +17,12 @@
  */
 
 #include <postgres.h>
-#include <fmgr.h>
+#include "spectrum.h"
+
 #include <catalog/pg_type.h>
 #include <utils/lsyscache.h>
 
-PG_MODULE_MAGIC;
+Oid spectrumOid;
 
 PG_FUNCTION_INFO_V1(spectrum_input);
 Datum spectrum_input(PG_FUNCTION_ARGS)

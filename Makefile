@@ -9,8 +9,10 @@ DATA         = $(wildcard sql/*.sql)
 DOCS         = $(wildcard doc/*.md)
 TESTS        = $(wildcard test/sql/*.sql)
 REGRESS      = $(patsubst test/sql/%.sql,%,$(TESTS))
+OBJS         = $(patsubst %.c,%.o,$(wildcard src/*.c))
 REGRESS_OPTS = --inputdir=test
-MODULES      = $(patsubst %.c,%,$(wildcard src/*.c))
+MODULE_big   = pgms
+
 PG_CONFIG   ?= pg_config
 EXTRA_CLEAN  = sql/$(EXTENSION)--$(EXTVERSION).sql
 

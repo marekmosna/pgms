@@ -48,8 +48,6 @@ Author: PM Larsen & Jakub Galgonek
 
 #include "cosine.h"
 
-PG_MODULE_MAGIC;
-
 #define swap(a,b)   do { typeof(a) t = a; a = b; b = t; } while(0)
 
 static void solve_rectangular_linear_sum_assignment(int nr, int nc, const float *restrict cost, float offset,

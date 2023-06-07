@@ -17,9 +17,9 @@
 
 #pragma once
 
-#include <postgres.h>
 #include <fmgr.h>
-#include <catalog/pg_type.h>
+
+extern Oid spectrumOid;
 
 extern Datum spectrum_input(PG_FUNCTION_ARGS);
 extern Datum spectrum_output(PG_FUNCTION_ARGS);
