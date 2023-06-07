@@ -28,12 +28,13 @@ typedef float4 (*calc_score_func_t)(const float4,
     const float4,
     const float4);
 
-calc_score_func_t determine_calc_score(const float4 mz_power,const float4 intenzity_power);
+typedef float4 (*calc_norm_func_t)(const float4 *restrict,
+    const float4 *restrict,
+    const size_t,
+    const float4,
+    const float4);
 
-float4 calc_norm(const float4 *restrict intensities,
-    const float4 *restrict mz,
-    const size_t len,
-    const float4 intensity_power,
-    const float4 mz_power);
+calc_score_func_t determine_calc_score(const float4 mz_power,const float4 intenzity_power);
+calc_norm_func_t  determine_calc_norm(const float4 mz_power,const float4 intenzity_power);
 
 #endif /* COSINE_H */
