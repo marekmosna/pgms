@@ -1,50 +1,50 @@
 {
-    "name": "pgms",
-    "abstract": "Postgres Mass Spectrometry Extension",
-    "description": "",
-    "version": "0.2.0",
-    "maintainer": [
-       "Marek Mosna <marek.mosna@genesissoftware.eu>"
-    ],
-    "license": "GPLv3",
-    "provides": {
-       "semver": {
-          "abstract": "Postgres Mass Spectrometry Extension",
-          "file": "sql/pgms--0.1--0.2.0.sql",
-          "docfile": "README.md",
-          "version": "0.2.0"
-       }
-    },
-    "prereqs": {
-       "runtime": {
-          "requires": {
-             "PostgreSQL": "11.0.0"
-          }
-       },
-       "test": {
-          "requires": {
-             "plpgsql": 0
-          }
-       }
-    },
-    "resources": {
-       "bugtracker": {
-          "web": "https://github.com/marekmosna/pgms/issues/"
-       },
-       "repository": {
-          "url": "git://github.com/marekmosna/pgms.git",
-          "web": "https://github.com/marekmosna/pgms/",
-          "type": "git"
-       }
-    },
-    "generated_by": "Marek Mosna",
-    "meta-spec": {
-       "version": "1.0.0",
-       "url": "https://pgxn.org/meta/spec.txt"
-    },
-    "tags": [
-       "mass spectrometry",
-       "cosine",
-       "mgf"
-    ]
- }
+   "name": "pgms",
+   "abstract": "Implement molecules recognition strategy based on mass spectrometry as a extension of PostgreSQL relation database system. Extension contains several similarity algorithms and supports several data formats. Solution is part of Integrated database of small molecules provides by Institute of Organic Chemistry and Biochemistry of the CAS.",
+   "description": "Project pgms is a perfect choice for institutions that provide data services with well known mass to charge ratios molecules based on Mass spectrometry technique which they want to provide comfortably over web application. Thanks to the database solution, the dataset of known molecules can grow to provide reliable and robust solution and help for further development in various industries such as food science, medical and healtcare science, biological research and many more.",
+   "version": "0.2.0",
+   "maintainer": [
+      "Marek Mosna <marek.mosna@genesissoftware.eu>"
+   ],
+   "license": "GPLv3",
+   "provides": {
+      "pgms": {
+         "abstract": "Postgres Mass Spectrometry Extension",
+         "file": "sql/pgms--0.1--0.2.0.sql",
+         "docfile": "README.md",
+         "version": "0.2.0"
+      }
+   },
+   "prereqs": {
+      "runtime": {
+         "requires": {
+            "PostgreSQL": "11.0.0"
+         }
+      },
+      "test": {
+         "requires": {
+            "plpgsql": 0
+         }
+      }
+   },
+   "resources": {
+      "bugtracker": {
+         "web": "https://github.com/marekmosna/pgms/issues/"
+      },
+      "repository": {
+         "url": "git://github.com/marekmosna/pgms.git",
+         "web": "https://github.com/marekmosna/pgms/",
+         "type": "git"
+      }
+   },
+   "generated_by": "Marek Mosna",
+   "meta-spec": {
+      "version": "1.0.0",
+      "url": "https://pgxn.org/meta/spec.txt"
+   },
+   "tags": [
+      "mass spectrometry",
+      "cosine",
+      "mgf"
+   ]
+}
