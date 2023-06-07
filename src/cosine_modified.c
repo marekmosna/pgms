@@ -43,6 +43,7 @@ Datum cosine_modified(PG_FUNCTION_ARGS)
     const float4 mz_power = PG_GETARG_FLOAT4(4);
     const float4 intensity_power = PG_GETARG_FLOAT4(5);
     calc_score_func_t calc_score = determine_calc_score(mz_power, intensity_power);
+    calc_norm_func_t calc_norm = determine_calc_norm(mz_power, intensity_power);
 
     reference_len = spectrum_length(reference);
     reference_mzs = spectrum_data(reference);
