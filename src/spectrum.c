@@ -61,7 +61,7 @@ size_t spectrum_length(Datum spectrum)
     int ndims = ARR_NDIM(s);
     int *dims = ARR_DIMS(s);
     int nitems = ArrayGetNItems(ndims, dims);
-    return nitems / ndims;
+    return ndims ? nitems / ndims : ndims;
 }
 
 extern float4* spectrum_data(Datum spectrum)
