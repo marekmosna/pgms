@@ -1,3 +1,9 @@
 \set ECHO none
-1..1
-ok 1 - intersect_mz should be 0.33
+1..7
+ok 1 - intersect_mz should be 0.00
+ok 2 - intersect_mz should be 0.00
+ok 3 - intersect_mz should be 0.75
+ok 4 - intersect_mz should be 0.00
+ok 5 - intersect_mz should be 0.75
+ok 6 - intersect_mz should be 0.50
+ok 7 - intersect_mz should be 0.50
