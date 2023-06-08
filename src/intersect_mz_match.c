@@ -30,8 +30,7 @@ Datum intersect_mz(PG_FUNCTION_ARGS)
     float4 *restrict query_mzs;
     size_t count_intersect = 0;
     size_t count_union = 0;
-    Index reference_mz = 0;
-    Index query_mz = 0;
+    Index lowest_idx = 0;
 
     Datum reference = PG_GETARG_DATUM(0);
     Datum query = PG_GETARG_DATUM(1);
@@ -46,50 +45,40 @@ Datum intersect_mz(PG_FUNCTION_ARGS)
     elog(DEBUG1, "reference of %ld against query of %ld",
         reference_len, query_len);
 
-    while (reference_mz < reference_len && query_mz < query_len)
+    for(Index reference_index = 0; reference_index < reference_len; reference_index++)
     {
-        float4 low_bound = reference_mzs[reference_mz] - tolerance;
-        float4 high_bound = reference_mzs[reference_mz] + tolerance;
+        float4 reference_low = reference_mzs[reference_index] - tolerance;
+        float4 reference_high = reference_mzs[reference_index] + tolerance;
 
-        if (float4_lt(query_mzs[query_mz], low_bound))
+        for(Index query_index = lowest_idx; query_index < query_len; query_index++)
         {
-            reference_mz++;
-            count_union++;
-            elog(DEBUG1, "too low: ref %f against query %f",low_bound, query_mzs[query_mz]);
-        }
-        else if (float4_gt(query_mzs[query_mz], high_bound))
-        {
-            query_mz++;
-            count_union++;
-            elog(DEBUG1, "too high: shift refquery to %d",query_mz);
-        }
-        else
-        {
-            elog(DEBUG1, "intersection on ref %d against query on %d",
-                reference_mz, query_mz);
-            reference_mz++;
-            query_mz++;
-            count_union++;
-            count_intersect++;
-        }
-    }
+            if(float4_gt(query_mzs[query_index], reference_high))
+            {
+                elog(DEBUG1, "break [%f,%f]", reference_mzs[reference_index], query_mzs[query_index]);
+                break;
+            }
 
-    while (reference_mz < reference_len)
-    {
-        count_union++;
-        reference_mz++;
-    }
-
-    while (query_mz < query_len)
-    {
-        count_union++;
-        query_mz++;
+            if(float4_lt(query_mzs[query_index], reference_low))
+            {
+                elog(DEBUG1, "skip [%f,%f]", reference_mzs[reference_index], query_mzs[query_index]);
+                lowest_idx = query_index + 1;
+                count_union++;
+            }
+            else
+            {
+                elog(DEBUG1, "match [%f,%f] while %ld", reference_mzs[reference_index], query_mzs[query_index], count_union);
+                lowest_idx = query_index + 1;
+                count_intersect++;
+                count_union++;
+                break;
+            }
+        }
     }
 
     PG_FREE_IF_COPY(PG_DETOAST_DATUM(reference), 0);
     PG_FREE_IF_COPY(PG_DETOAST_DATUM(query), 1);
 
-    if(count_intersect)
+    if(count_intersect && count_union != 0)
         PG_RETURN_FLOAT4(float4_div(count_intersect, count_union));
     else
         PG_RETURN_FLOAT4(0.0f);
